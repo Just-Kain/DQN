@@ -1,0 +1,766 @@
+{
+  "version": 3,
+  "targets": {
+    "net8.0": {
+      "CSFML/3.0.0": {
+        "type": "package",
+        "build": {
+          "build/netstandard2.0/_._": {}
+        },
+        "runtimeTargets": {
+          "runtimes/linux-arm/native/libcsfml-audio.so": {
+            "assetType": "native",
+            "rid": "linux-arm"
+          },
+          "runtimes/linux-arm/native/libcsfml-audio.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-arm"
+          },
+          "runtimes/linux-arm/native/libcsfml-graphics.so": {
+            "assetType": "native",
+            "rid": "linux-arm"
+          },
+          "runtimes/linux-arm/native/libcsfml-graphics.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-arm"
+          },
+          "runtimes/linux-arm/native/libcsfml-system.so": {
+            "assetType": "native",
+            "rid": "linux-arm"
+          },
+          "runtimes/linux-arm/native/libcsfml-system.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-arm"
+          },
+          "runtimes/linux-arm/native/libcsfml-window.so": {
+            "assetType": "native",
+            "rid": "linux-arm"
+          },
+          "runtimes/linux-arm/native/libcsfml-window.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-arm"
+          },
+          "runtimes/linux-arm/native/libsfml-audio.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-arm"
+          },
+          "runtimes/linux-arm/native/libsfml-graphics.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-arm"
+          },
+          "runtimes/linux-arm/native/libsfml-system.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-arm"
+          },
+          "runtimes/linux-arm/native/libsfml-window.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-arm"
+          },
+          "runtimes/linux-arm64/native/libcsfml-audio.so": {
+            "assetType": "native",
+            "rid": "linux-arm64"
+          },
+          "runtimes/linux-arm64/native/libcsfml-audio.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-arm64"
+          },
+          "runtimes/linux-arm64/native/libcsfml-graphics.so": {
+            "assetType": "native",
+            "rid": "linux-arm64"
+          },
+          "runtimes/linux-arm64/native/libcsfml-graphics.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-arm64"
+          },
+          "runtimes/linux-arm64/native/libcsfml-system.so": {
+            "assetType": "native",
+            "rid": "linux-arm64"
+          },
+          "runtimes/linux-arm64/native/libcsfml-system.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-arm64"
+          },
+          "runtimes/linux-arm64/native/libcsfml-window.so": {
+            "assetType": "native",
+            "rid": "linux-arm64"
+          },
+          "runtimes/linux-arm64/native/libcsfml-window.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-arm64"
+          },
+          "runtimes/linux-arm64/native/libsfml-audio.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-arm64"
+          },
+          "runtimes/linux-arm64/native/libsfml-graphics.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-arm64"
+          },
+          "runtimes/linux-arm64/native/libsfml-system.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-arm64"
+          },
+          "runtimes/linux-arm64/native/libsfml-window.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-arm64"
+          },
+          "runtimes/linux-musl-x64/native/libcsfml-audio.so": {
+            "assetType": "native",
+            "rid": "linux-musl-x64"
+          },
+          "runtimes/linux-musl-x64/native/libcsfml-audio.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-musl-x64"
+          },
+          "runtimes/linux-musl-x64/native/libcsfml-graphics.so": {
+            "assetType": "native",
+            "rid": "linux-musl-x64"
+          },
+          "runtimes/linux-musl-x64/native/libcsfml-graphics.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-musl-x64"
+          },
+          "runtimes/linux-musl-x64/native/libcsfml-system.so": {
+            "assetType": "native",
+            "rid": "linux-musl-x64"
+          },
+          "runtimes/linux-musl-x64/native/libcsfml-system.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-musl-x64"
+          },
+          "runtimes/linux-musl-x64/native/libcsfml-window.so": {
+            "assetType": "native",
+            "rid": "linux-musl-x64"
+          },
+          "runtimes/linux-musl-x64/native/libcsfml-window.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-musl-x64"
+          },
+          "runtimes/linux-musl-x64/native/libsfml-audio.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-musl-x64"
+          },
+          "runtimes/linux-musl-x64/native/libsfml-graphics.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-musl-x64"
+          },
+          "runtimes/linux-musl-x64/native/libsfml-system.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-musl-x64"
+          },
+          "runtimes/linux-musl-x64/native/libsfml-window.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-musl-x64"
+          },
+          "runtimes/linux-x64/native/libcsfml-audio.so": {
+            "assetType": "native",
+            "rid": "linux-x64"
+          },
+          "runtimes/linux-x64/native/libcsfml-audio.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-x64"
+          },
+          "runtimes/linux-x64/native/libcsfml-graphics.so": {
+            "assetType": "native",
+            "rid": "linux-x64"
+          },
+          "runtimes/linux-x64/native/libcsfml-graphics.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-x64"
+          },
+          "runtimes/linux-x64/native/libcsfml-system.so": {
+            "assetType": "native",
+            "rid": "linux-x64"
+          },
+          "runtimes/linux-x64/native/libcsfml-system.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-x64"
+          },
+          "runtimes/linux-x64/native/libcsfml-window.so": {
+            "assetType": "native",
+            "rid": "linux-x64"
+          },
+          "runtimes/linux-x64/native/libcsfml-window.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-x64"
+          },
+          "runtimes/linux-x64/native/libsfml-audio.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-x64"
+          },
+          "runtimes/linux-x64/native/libsfml-graphics.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-x64"
+          },
+          "runtimes/linux-x64/native/libsfml-system.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-x64"
+          },
+          "runtimes/linux-x64/native/libsfml-window.so.3.0": {
+            "assetType": "native",
+            "rid": "linux-x64"
+          },
+          "runtimes/osx-arm64/native/libcsfml-audio.3.0.dylib": {
+            "assetType": "native",
+            "rid": "osx-arm64"
+          },
+          "runtimes/osx-arm64/native/libcsfml-audio.dylib": {
+            "assetType": "native",
+            "rid": "osx-arm64"
+          },
+          "runtimes/osx-arm64/native/libcsfml-graphics.3.0.dylib": {
+            "assetType": "native",
+            "rid": "osx-arm64"
+          },
+          "runtimes/osx-arm64/native/libcsfml-graphics.dylib": {
+            "assetType": "native",
+            "rid": "osx-arm64"
+          },
+          "runtimes/osx-arm64/native/libcsfml-system.3.0.dylib": {
+            "assetType": "native",
+            "rid": "osx-arm64"
+          },
+          "runtimes/osx-arm64/native/libcsfml-system.dylib": {
+            "assetType": "native",
+            "rid": "osx-arm64"
+          },
+          "runtimes/osx-arm64/native/libcsfml-window.3.0.dylib": {
+            "assetType": "native",
+            "rid": "osx-arm64"
+          },
+          "runtimes/osx-arm64/native/libcsfml-window.dylib": {
+            "assetType": "native",
+            "rid": "osx-arm64"
+          },
+          "runtimes/osx-arm64/native/libsfml-audio.3.0.dylib": {
+            "assetType": "native",
+            "rid": "osx-arm64"
+          },
+          "runtimes/osx-arm64/native/libsfml-graphics.3.0.dylib": {
+            "assetType": "native",
+            "rid": "osx-arm64"
+          },
+          "runtimes/osx-arm64/native/libsfml-system.3.0.dylib": {
+            "assetType": "native",
+            "rid": "osx-arm64"
+          },
+          "runtimes/osx-arm64/native/libsfml-window.3.0.dylib": {
+            "assetType": "native",
+            "rid": "osx-arm64"
+          },
+          "runtimes/osx-x64/native/libcsfml-audio.3.0.dylib": {
+            "assetType": "native",
+            "rid": "osx-x64"
+          },
+          "runtimes/osx-x64/native/libcsfml-audio.dylib": {
+            "assetType": "native",
+            "rid": "osx-x64"
+          },
+          "runtimes/osx-x64/native/libcsfml-graphics.3.0.dylib": {
+            "assetType": "native",
+            "rid": "osx-x64"
+          },
+          "runtimes/osx-x64/native/libcsfml-graphics.dylib": {
+            "assetType": "native",
+            "rid": "osx-x64"
+          },
+          "runtimes/osx-x64/native/libcsfml-system.3.0.dylib": {
+            "assetType": "native",
+            "rid": "osx-x64"
+          },
+          "runtimes/osx-x64/native/libcsfml-system.dylib": {
+            "assetType": "native",
+            "rid": "osx-x64"
+          },
+          "runtimes/osx-x64/native/libcsfml-window.3.0.dylib": {
+            "assetType": "native",
+            "rid": "osx-x64"
+          },
+          "runtimes/osx-x64/native/libcsfml-window.dylib": {
+            "assetType": "native",
+            "rid": "osx-x64"
+          },
+          "runtimes/osx-x64/native/libsfml-audio.3.0.dylib": {
+            "assetType": "native",
+            "rid": "osx-x64"
+          },
+          "runtimes/osx-x64/native/libsfml-graphics.3.0.dylib": {
+            "assetType": "native",
+            "rid": "osx-x64"
+          },
+          "runtimes/osx-x64/native/libsfml-system.3.0.dylib": {
+            "assetType": "native",
+            "rid": "osx-x64"
+          },
+          "runtimes/osx-x64/native/libsfml-window.3.0.dylib": {
+            "assetType": "native",
+            "rid": "osx-x64"
+          },
+          "runtimes/win-arm64/native/csfml-audio.dll": {
+            "assetType": "native",
+            "rid": "win-arm64"
+          },
+          "runtimes/win-arm64/native/csfml-graphics.dll": {
+            "assetType": "native",
+            "rid": "win-arm64"
+          },
+          "runtimes/win-arm64/native/csfml-system.dll": {
+            "assetType": "native",
+            "rid": "win-arm64"
+          },
+          "runtimes/win-arm64/native/csfml-window.dll": {
+            "assetType": "native",
+            "rid": "win-arm64"
+          },
+          "runtimes/win-arm64/native/msvcp140.dll": {
+            "assetType": "native",
+            "rid": "win-arm64"
+          },
+          "runtimes/win-arm64/native/sfml-audio-3.dll": {
+            "assetType": "native",
+            "rid": "win-arm64"
+          },
+          "runtimes/win-arm64/native/sfml-graphics-3.dll": {
+            "assetType": "native",
+            "rid": "win-arm64"
+          },
+          "runtimes/win-arm64/native/sfml-system-3.dll": {
+            "assetType": "native",
+            "rid": "win-arm64"
+          },
+          "runtimes/win-arm64/native/sfml-window-3.dll": {
+            "assetType": "native",
+            "rid": "win-arm64"
+          },
+          "runtimes/win-arm64/native/vcruntime140.dll": {
+            "assetType": "native",
+            "rid": "win-arm64"
+          },
+          "runtimes/win-x64/native/csfml-audio.dll": {
+            "assetType": "native",
+            "rid": "win-x64"
+          },
+          "runtimes/win-x64/native/csfml-graphics.dll": {
+            "assetType": "native",
+            "rid": "win-x64"
+          },
+          "runtimes/win-x64/native/csfml-system.dll": {
+            "assetType": "native",
+            "rid": "win-x64"
+          },
+          "runtimes/win-x64/native/csfml-window.dll": {
+            "assetType": "native",
+            "rid": "win-x64"
+          },
+          "runtimes/win-x64/native/msvcp140.dll": {
+            "assetType": "native",
+            "rid": "win-x64"
+          },
+          "runtimes/win-x64/native/sfml-audio-3.dll": {
+            "assetType": "native",
+            "rid": "win-x64"
+          },
+          "runtimes/win-x64/native/sfml-graphics-3.dll": {
+            "assetType": "native",
+            "rid": "win-x64"
+          },
+          "runtimes/win-x64/native/sfml-system-3.dll": {
+            "assetType": "native",
+            "rid": "win-x64"
+          },
+          "runtimes/win-x64/native/sfml-window-3.dll": {
+            "assetType": "native",
+            "rid": "win-x64"
+          },
+          "runtimes/win-x64/native/vcruntime140.dll": {
+            "assetType": "native",
+            "rid": "win-x64"
+          },
+          "runtimes/win-x64/native/vcruntime140_1.dll": {
+            "assetType": "native",
+            "rid": "win-x64"
+          },
+          "runtimes/win-x86/native/csfml-audio.dll": {
+            "assetType": "native",
+            "rid": "win-x86"
+          },
+          "runtimes/win-x86/native/csfml-graphics.dll": {
+            "assetType": "native",
+            "rid": "win-x86"
+          },
+          "runtimes/win-x86/native/csfml-system.dll": {
+            "assetType": "native",
+            "rid": "win-x86"
+          },
+          "runtimes/win-x86/native/csfml-window.dll": {
+            "assetType": "native",
+            "rid": "win-x86"
+          },
+          "runtimes/win-x86/native/msvcp140.dll": {
+            "assetType": "native",
+            "rid": "win-x86"
+          },
+          "runtimes/win-x86/native/sfml-audio-3.dll": {
+            "assetType": "native",
+            "rid": "win-x86"
+          },
+          "runtimes/win-x86/native/sfml-graphics-3.dll": {
+            "assetType": "native",
+            "rid": "win-x86"
+          },
+          "runtimes/win-x86/native/sfml-system-3.dll": {
+            "assetType": "native",
+            "rid": "win-x86"
+          },
+          "runtimes/win-x86/native/sfml-window-3.dll": {
+            "assetType": "native",
+            "rid": "win-x86"
+          },
+          "runtimes/win-x86/native/vcruntime140.dll": {
+            "assetType": "native",
+            "rid": "win-x86"
+          }
+        }
+      },
+      "SFML.Audio/3.0.0": {
+        "type": "package",
+        "dependencies": {
+          "CSFML": "[3.0.0, 3.1.0)",
+          "SFML.System": "3.0.0"
+        },
+        "compile": {
+          "lib/netstandard2.0/SFML.Audio.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/netstandard2.0/SFML.Audio.dll": {
+            "related": ".xml"
+          }
+        }
+      },
+      "SFML.Graphics/3.0.0": {
+        "type": "package",
+        "dependencies": {
+          "CSFML": "[3.0.0, 3.1.0)",
+          "SFML.System": "3.0.0",
+          "SFML.Window": "3.0.0"
+        },
+        "compile": {
+          "lib/netstandard2.0/SFML.Graphics.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/netstandard2.0/SFML.Graphics.dll": {
+            "related": ".xml"
+          }
+        }
+      },
+      "SFML.Net/3.0.0": {
+        "type": "package",
+        "dependencies": {
+          "SFML.Audio": "3.0.0",
+          "SFML.Graphics": "3.0.0",
+          "SFML.System": "3.0.0",
+          "SFML.Window": "3.0.0"
+        }
+      },
+      "SFML.System/3.0.0": {
+        "type": "package",
+        "dependencies": {
+          "CSFML": "[3.0.0, 3.1.0)"
+        },
+        "compile": {
+          "lib/netstandard2.0/SFML.System.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/netstandard2.0/SFML.System.dll": {
+            "related": ".xml"
+          }
+        }
+      },
+      "SFML.Window/3.0.0": {
+        "type": "package",
+        "dependencies": {
+          "CSFML": "[3.0.0, 3.1.0)",
+          "SFML.System": "3.0.0"
+        },
+        "compile": {
+          "lib/netstandard2.0/SFML.Window.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/netstandard2.0/SFML.Window.dll": {
+            "related": ".xml"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "CSFML/3.0.0": {
+      "sha512": "iwzebpEjtHMmrBWrIZf7lo20PlzGCe4ifh5y/x0RwNE3pcUh4rdLkcnKwuxE+k6gHFbUehQ2/4GuiUB3i6v3Ww==",
+      "type": "package",
+      "path": "csfml/3.0.0",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "build/netframework/CSFML.props",
+        "build/netframework/CSFML.targets",
+        "build/netstandard2.0/CSFML.props",
+        "csfml.3.0.0.nupkg.sha512",
+        "csfml.nuspec",
+        "readme.md",
+        "runtimes/linux-arm/native/libcsfml-audio.so",
+        "runtimes/linux-arm/native/libcsfml-audio.so.3.0",
+        "runtimes/linux-arm/native/libcsfml-graphics.so",
+        "runtimes/linux-arm/native/libcsfml-graphics.so.3.0",
+        "runtimes/linux-arm/native/libcsfml-system.so",
+        "runtimes/linux-arm/native/libcsfml-system.so.3.0",
+        "runtimes/linux-arm/native/libcsfml-window.so",
+        "runtimes/linux-arm/native/libcsfml-window.so.3.0",
+        "runtimes/linux-arm/native/libsfml-audio.so.3.0",
+        "runtimes/linux-arm/native/libsfml-graphics.so.3.0",
+        "runtimes/linux-arm/native/libsfml-system.so.3.0",
+        "runtimes/linux-arm/native/libsfml-window.so.3.0",
+        "runtimes/linux-arm64/native/libcsfml-audio.so",
+        "runtimes/linux-arm64/native/libcsfml-audio.so.3.0",
+        "runtimes/linux-arm64/native/libcsfml-graphics.so",
+        "runtimes/linux-arm64/native/libcsfml-graphics.so.3.0",
+        "runtimes/linux-arm64/native/libcsfml-system.so",
+        "runtimes/linux-arm64/native/libcsfml-system.so.3.0",
+        "runtimes/linux-arm64/native/libcsfml-window.so",
+        "runtimes/linux-arm64/native/libcsfml-window.so.3.0",
+        "runtimes/linux-arm64/native/libsfml-audio.so.3.0",
+        "runtimes/linux-arm64/native/libsfml-graphics.so.3.0",
+        "runtimes/linux-arm64/native/libsfml-system.so.3.0",
+        "runtimes/linux-arm64/native/libsfml-window.so.3.0",
+        "runtimes/linux-musl-x64/native/libcsfml-audio.so",
+        "runtimes/linux-musl-x64/native/libcsfml-audio.so.3.0",
+        "runtimes/linux-musl-x64/native/libcsfml-graphics.so",
+        "runtimes/linux-musl-x64/native/libcsfml-graphics.so.3.0",
+        "runtimes/linux-musl-x64/native/libcsfml-system.so",
+        "runtimes/linux-musl-x64/native/libcsfml-system.so.3.0",
+        "runtimes/linux-musl-x64/native/libcsfml-window.so",
+        "runtimes/linux-musl-x64/native/libcsfml-window.so.3.0",
+        "runtimes/linux-musl-x64/native/libsfml-audio.so.3.0",
+        "runtimes/linux-musl-x64/native/libsfml-graphics.so.3.0",
+        "runtimes/linux-musl-x64/native/libsfml-system.so.3.0",
+        "runtimes/linux-musl-x64/native/libsfml-window.so.3.0",
+        "runtimes/linux-x64/native/libcsfml-audio.so",
+        "runtimes/linux-x64/native/libcsfml-audio.so.3.0",
+        "runtimes/linux-x64/native/libcsfml-graphics.so",
+        "runtimes/linux-x64/native/libcsfml-graphics.so.3.0",
+        "runtimes/linux-x64/native/libcsfml-system.so",
+        "runtimes/linux-x64/native/libcsfml-system.so.3.0",
+        "runtimes/linux-x64/native/libcsfml-window.so",
+        "runtimes/linux-x64/native/libcsfml-window.so.3.0",
+        "runtimes/linux-x64/native/libsfml-audio.so.3.0",
+        "runtimes/linux-x64/native/libsfml-graphics.so.3.0",
+        "runtimes/linux-x64/native/libsfml-system.so.3.0",
+        "runtimes/linux-x64/native/libsfml-window.so.3.0",
+        "runtimes/osx-arm64/native/libcsfml-audio.3.0.dylib",
+        "runtimes/osx-arm64/native/libcsfml-audio.dylib",
+        "runtimes/osx-arm64/native/libcsfml-graphics.3.0.dylib",
+        "runtimes/osx-arm64/native/libcsfml-graphics.dylib",
+        "runtimes/osx-arm64/native/libcsfml-system.3.0.dylib",
+        "runtimes/osx-arm64/native/libcsfml-system.dylib",
+        "runtimes/osx-arm64/native/libcsfml-window.3.0.dylib",
+        "runtimes/osx-arm64/native/libcsfml-window.dylib",
+        "runtimes/osx-arm64/native/libsfml-audio.3.0.dylib",
+        "runtimes/osx-arm64/native/libsfml-graphics.3.0.dylib",
+        "runtimes/osx-arm64/native/libsfml-system.3.0.dylib",
+        "runtimes/osx-arm64/native/libsfml-window.3.0.dylib",
+        "runtimes/osx-x64/native/libcsfml-audio.3.0.dylib",
+        "runtimes/osx-x64/native/libcsfml-audio.dylib",
+        "runtimes/osx-x64/native/libcsfml-graphics.3.0.dylib",
+        "runtimes/osx-x64/native/libcsfml-graphics.dylib",
+        "runtimes/osx-x64/native/libcsfml-system.3.0.dylib",
+        "runtimes/osx-x64/native/libcsfml-system.dylib",
+        "runtimes/osx-x64/native/libcsfml-window.3.0.dylib",
+        "runtimes/osx-x64/native/libcsfml-window.dylib",
+        "runtimes/osx-x64/native/libsfml-audio.3.0.dylib",
+        "runtimes/osx-x64/native/libsfml-graphics.3.0.dylib",
+        "runtimes/osx-x64/native/libsfml-system.3.0.dylib",
+        "runtimes/osx-x64/native/libsfml-window.3.0.dylib",
+        "runtimes/win-arm64/native/csfml-audio.dll",
+        "runtimes/win-arm64/native/csfml-graphics.dll",
+        "runtimes/win-arm64/native/csfml-system.dll",
+        "runtimes/win-arm64/native/csfml-window.dll",
+        "runtimes/win-arm64/native/msvcp140.dll",
+        "runtimes/win-arm64/native/sfml-audio-3.dll",
+        "runtimes/win-arm64/native/sfml-graphics-3.dll",
+        "runtimes/win-arm64/native/sfml-system-3.dll",
+        "runtimes/win-arm64/native/sfml-window-3.dll",
+        "runtimes/win-arm64/native/vcruntime140.dll",
+        "runtimes/win-x64/native/csfml-audio.dll",
+        "runtimes/win-x64/native/csfml-graphics.dll",
+        "runtimes/win-x64/native/csfml-system.dll",
+        "runtimes/win-x64/native/csfml-window.dll",
+        "runtimes/win-x64/native/msvcp140.dll",
+        "runtimes/win-x64/native/sfml-audio-3.dll",
+        "runtimes/win-x64/native/sfml-graphics-3.dll",
+        "runtimes/win-x64/native/sfml-system-3.dll",
+        "runtimes/win-x64/native/sfml-window-3.dll",
+        "runtimes/win-x64/native/vcruntime140.dll",
+        "runtimes/win-x64/native/vcruntime140_1.dll",
+        "runtimes/win-x86/native/csfml-audio.dll",
+        "runtimes/win-x86/native/csfml-graphics.dll",
+        "runtimes/win-x86/native/csfml-system.dll",
+        "runtimes/win-x86/native/csfml-window.dll",
+        "runtimes/win-x86/native/msvcp140.dll",
+        "runtimes/win-x86/native/sfml-audio-3.dll",
+        "runtimes/win-x86/native/sfml-graphics-3.dll",
+        "runtimes/win-x86/native/sfml-system-3.dll",
+        "runtimes/win-x86/native/sfml-window-3.dll",
+        "runtimes/win-x86/native/vcruntime140.dll",
+        "sfml-icon.png"
+      ]
+    },
+    "SFML.Audio/3.0.0": {
+      "sha512": "Dy+aRvajHurJXqAXHS2obXbxTE0dYy8dW5HS1qwjP2MgipZFjwT9cEWRfPUix/RbgE1euxg04J8gsV99iUhc+g==",
+      "type": "package",
+      "path": "sfml.audio/3.0.0",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "lib/netstandard2.0/SFML.Audio.dll",
+        "lib/netstandard2.0/SFML.Audio.xml",
+        "readme.md",
+        "sfml-icon.png",
+        "sfml.audio.3.0.0.nupkg.sha512",
+        "sfml.audio.nuspec"
+      ]
+    },
+    "SFML.Graphics/3.0.0": {
+      "sha512": "2dcdwHCrgVwkVa52V2T2ZaiORMXgznwdMCsNXBMn/oPnxFa7AWWuxNVftv6kvjER56SIw0f1asYs1npTyEFXxg==",
+      "type": "package",
+      "path": "sfml.graphics/3.0.0",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "lib/netstandard2.0/SFML.Graphics.dll",
+        "lib/netstandard2.0/SFML.Graphics.xml",
+        "readme.md",
+        "sfml-icon.png",
+        "sfml.graphics.3.0.0.nupkg.sha512",
+        "sfml.graphics.nuspec"
+      ]
+    },
+    "SFML.Net/3.0.0": {
+      "sha512": "PNW30Q+swW4cqMhCbWjTWWclVaXVjG1tFgQWIoWcwTSugbV0zDJA/EOVPouPSdWPN2ly2dExp59zCn1CZyn64w==",
+      "type": "package",
+      "path": "sfml.net/3.0.0",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "readme.md",
+        "sfml-icon.png",
+        "sfml.net.3.0.0.nupkg.sha512",
+        "sfml.net.nuspec"
+      ]
+    },
+    "SFML.System/3.0.0": {
+      "sha512": "k6s8BB53Xrugmx25rmlZRoezAkSyjpxNPeIrFT5hUoDJ32XSj0bvJdTWomB6Aiph7nNaJrCnA/K0o1x0ZCPUYQ==",
+      "type": "package",
+      "path": "sfml.system/3.0.0",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "lib/netstandard2.0/SFML.System.dll",
+        "lib/netstandard2.0/SFML.System.xml",
+        "readme.md",
+        "sfml-icon.png",
+        "sfml.system.3.0.0.nupkg.sha512",
+        "sfml.system.nuspec"
+      ]
+    },
+    "SFML.Window/3.0.0": {
+      "sha512": "Yu+QJVQ4dRbfOgnN+xSl3rqetseNKD711k9gsdYqic9f9QDBK2raIUJTYx+JsH/NXo3rVt1NGkCm5ucSj5OzdQ==",
+      "type": "package",
+      "path": "sfml.window/3.0.0",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "lib/netstandard2.0/SFML.Window.dll",
+        "lib/netstandard2.0/SFML.Window.xml",
+        "readme.md",
+        "sfml-icon.png",
+        "sfml.window.3.0.0.nupkg.sha512",
+        "sfml.window.nuspec"
+      ]
+    }
+  },
+  "projectFileDependencyGroups": {
+    "net8.0": [
+      "SFML.Net >= 3.0.0"
+    ]
+  },
+  "packageFolders": {
+    "C:\\Users\\vbnmr\\.nuget\\packages\\": {}
+  },
+  "project": {
+    "version": "1.0.0",
+    "restore": {
+      "projectUniqueName": "D:\\DQN\\Game\\DungeonRL\\DungeonRL.csproj",
+      "projectName": "DungeonRL",
+      "projectPath": "D:\\DQN\\Game\\DungeonRL\\DungeonRL.csproj",
+      "packagesPath": "C:\\Users\\vbnmr\\.nuget\\packages\\",
+      "outputPath": "D:\\DQN\\Game\\DungeonRL\\obj\\",
+      "projectStyle": "PackageReference",
+      "configFilePaths": [
+        "C:\\Users\\vbnmr\\AppData\\Roaming\\NuGet\\NuGet.Config"
+      ],
+      "originalTargetFrameworks": [
+        "net8.0"
+      ],
+      "sources": {
+        "C:\\Program Files\\dotnet\\library-packs": {},
+        "https://api.nuget.org/v3/index.json": {}
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "projectReferences": {}
+        }
+      },
+      "warningProperties": {
+        "warnAsError": [
+          "NU1605"
+        ]
+      }
+    },
+    "frameworks": {
+      "net8.0": {
+        "targetAlias": "net8.0",
+        "dependencies": {
+          "SFML.Net": {
+            "target": "Package",
+            "version": "[3.0.0, )"
+          }
+        },
+        "imports": [
+          "net461",
+          "net462",
+          "net47",
+          "net471",
+          "net472",
+          "net48",
+          "net481"
+        ],
+        "assetTargetFallback": true,
+        "warn": true,
+        "frameworkReferences": {
+          "Microsoft.NETCore.App": {
+            "privateAssets": "all"
+          }
+        },
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.100/PortableRuntimeIdentifierGraph.json"
+      }
+    }
+  }
+}
