@@ -9,7 +9,7 @@ public class RewardSystem
         float reward = 0f;
 
         // штраф за шаг
-        reward -= 0.01f;
+        reward -= 0.1f;
 
         // исследование
         var pos = (current.Player.X, current.Player.Y);
@@ -28,11 +28,11 @@ public class RewardSystem
 
         // смерть игрока
         if (current.Player.HP <= 0)
-            reward -= 5f;
+            reward -= 10f;
 
         // завершение
         if (done && current.Player.HP > 0)
-            reward += 5f;
+            reward += 20f;
 
         return reward;
     }

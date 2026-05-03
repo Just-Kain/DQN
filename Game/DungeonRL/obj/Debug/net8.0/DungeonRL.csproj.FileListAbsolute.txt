@@ -121,3 +121,4 @@ D:\DQN\Game\DungeonRL\obj\Debug\net8.0\refint\DungeonRL.dll
 D:\DQN\Game\DungeonRL\obj\Debug\net8.0\DungeonRL.pdb
 D:\DQN\Game\DungeonRL\obj\Debug\net8.0\DungeonRL.genruntimeconfig.cache
 D:\DQN\Game\DungeonRL\obj\Debug\net8.0\ref\DungeonRL.dll
+D:\DQN\Game\DungeonRL\obj\Debug\net8.0\DungeonRL.sourcelink.json

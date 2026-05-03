@@ -16,7 +16,7 @@ using System.Collections.Generic;
 public class DungeonGenerator
 {
     // ── Настройки BSP ──────────────────────────────────────────────────────────
-    private const int MinSplitSize = 7;   // минимальный размер секции для разбиения
+    private const int MinSplitSize = 4;   // минимальный размер секции для разбиения
     private const int MaxDepth     = 4;   // максимальная глубина дерева
     private const int MinRoomSize  = 4;   // минимальный размер комнаты
 
@@ -42,8 +42,12 @@ public class DungeonGenerator
         // 4. Соединить комнаты коридорами
         CarveCorridors(map, root);
 
-        // 5. Разместить Exit в случайной комнате
+        // 5. Собрать комнаты и сохранить в карту
         var leaves = CollectLeaves(root);
+        foreach (var leaf in leaves)
+            map.Rooms.Add((leaf.RoomX, leaf.RoomY, leaf.RoomW, leaf.RoomH));
+
+        // Разместить Exit в случайной комнате
         var exitLeaf = leaves[rng.Next(leaves.Count)];
         int exitX = exitLeaf.RoomX + exitLeaf.RoomW / 2;
         int exitY = exitLeaf.RoomY + exitLeaf.RoomH / 2;
@@ -51,11 +55,14 @@ public class DungeonGenerator
         map.ExitX = exitX;
         map.ExitY = exitY;
 
-        // 6. Ямы вокруг выхода (только по диагоналям)
-        PlacePitsAroundExit(map, exitX, exitY);
+        // 6. Ямы в комнатах: у стен и в центрах
+        PlacePitsInRooms(map, leaves, exitX, exitY);
 
         // 7. BFS → позиция спавна игрока
         var (spawnX, spawnY) = FindMaxDistanceSpawn(map, exitX, exitY);
+        
+        map.Tiles[spawnX, spawnY] = TileType.Floor;
+
         map.PlayerSpawnX = spawnX;
         map.PlayerSpawnY = spawnY;
 
@@ -212,26 +219,65 @@ public class DungeonGenerator
             map.Tiles[x, y] = TileType.Floor;
     }
 
-    // ── Ямы вокруг выхода (только диагональные соседи) ────────────────────────
-    private void PlacePitsAroundExit(DungeonMap map, int exitX, int exitY)
+    // ── Ямы в комнатах: у стен и в центрах ───────────────────────────────────
+    /// <summary>
+    /// Размещает ямы двумя способами:
+    ///   1. У стен внутри комнаты — Floor-тайлы, у которых есть кардинальный сосед-стена.
+    ///      Вероятность: 35%.
+    ///   2. В центральной зоне комнаты (отступ ≥2 от края) — случайные ямы.
+    ///      Вероятность: 20%.
+    /// Защитная зона 3 тайла вокруг Exit остаётся свободной.
+    /// </summary>
+    private void PlacePitsInRooms(DungeonMap map, List<BspNode> leaves, int exitX, int exitY)
     {
-        // Диагональные смещения: ямы не перекрывают кардинальные подходы к Exit
-        int[] ddx = { -1, -1,  1,  1 };
-        int[] ddy = { -1,  1, -1,  1 };
+        const int ExitClearRadius = 3;   // тайлы вокруг Exit — без ям
+        const float WallPitChance   = 0.45f;
+        const float CenterPitChance = 0.33f;
 
-        for (int i = 0; i < 4; i++)
+        int[] cardDx = {  0,  0, -1, 1 };
+        int[] cardDy = { -1,  1,  0, 0 };
+
+        foreach (var leaf in leaves)
         {
-            int nx = exitX + ddx[i];
-            int ny = exitY + ddy[i];
+            int rx = leaf.RoomX, ry = leaf.RoomY;
+            int rw = leaf.RoomW, rh = leaf.RoomH;
 
-            if (nx <= 0 || nx >= map.Width  - 1) continue;
-            if (ny <= 0 || ny >= map.Height - 1) continue;
+            // 1. Ямы у стен — проверяем всю площадь комнаты
+            for (int x = rx; x < rx + rw; x++)
+            for (int y = ry; y < ry + rh; y++)
+            {
+                if (map.Tiles[x, y] != TileType.Floor) continue;
+                if (NearExit(x, y, exitX, exitY, ExitClearRadius)) continue;
 
-            // Размещаем яму только на полу и случайно (50%)
-            if (map.Tiles[nx, ny] == TileType.Floor && rng.Next(2) == 0)
-                map.Tiles[nx, ny] = TileType.Pit;
+                // Есть хотя бы один кардинальный сосед — Wall?
+                bool adjacentToWall = false;
+                for (int d = 0; d < 4; d++)
+                {
+                    int nx = x + cardDx[d], ny = y + cardDy[d];
+                    if (nx < 0 || nx >= map.Width || ny < 0 || ny >= map.Height) continue;
+                    if (map.Tiles[nx, ny] == TileType.Wall) { adjacentToWall = true; break; }
+                }
+                if (!adjacentToWall) continue;
+
+                if ((float)rng.NextDouble() < WallPitChance)
+                    map.Tiles[x, y] = TileType.Pit;
+            }
+
+            // 2. Ямы в центре комнаты (отступ 2 тайла от края)
+            for (int x = rx + 2; x < rx + rw - 2; x++)
+            for (int y = ry + 2; y < ry + rh - 2; y++)
+            {
+                if (map.Tiles[x, y] != TileType.Floor) continue;
+                if (NearExit(x, y, exitX, exitY, ExitClearRadius)) continue;
+
+                if ((float)rng.NextDouble() < CenterPitChance)
+                    map.Tiles[x, y] = TileType.Pit;
+            }
         }
     }
+
+    private static bool NearExit(int x, int y, int exitX, int exitY, int radius)
+        => Math.Abs(x - exitX) + Math.Abs(y - exitY) <= radius;
 
     // ── BFS: спавн игрока на максимальном расстоянии от Exit ──────────────────
     private (int x, int y) FindMaxDistanceSpawn(DungeonMap map, int exitX, int exitY)
@@ -262,8 +308,8 @@ public class DungeonGenerator
                 if (nx < 0 || nx >= map.Width || ny < 0 || ny >= map.Height) continue;
                 if (dist[nx, ny] != -1) continue;
 
-                var tile = map.Tiles[nx, ny];
-                if (tile != TileType.Floor && tile != TileType.Exit) continue;
+                // BFS для спавна — только Floor и Exit, без Pit
+                if (!map.IsWalkable(nx, ny)) continue;
 
                 dist[nx, ny] = dist[cx, cy] + 1;
                 queue.Enqueue((nx, ny));

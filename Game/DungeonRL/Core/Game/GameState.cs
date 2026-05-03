@@ -7,4 +7,10 @@ public class GameState
 
     public int StepCount;
     public bool IsTerminal;
+
+    /// <summary>
+    /// Последнее действие игрока на этом шаге.
+    /// Используется рендерером для отрисовки хитбоксов атак.
+    /// </summary>
+    public ActionType LastAction = ActionType.Idle;
 }
