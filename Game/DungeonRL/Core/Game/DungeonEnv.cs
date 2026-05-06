@@ -13,12 +13,19 @@ public class DungeonEnv
 
     public const int MaxSteps = 500;
 
+    /// <summary>
+    /// Размер карты (квадратная). Используется курикулум-обучением:
+    ///   Фаза 1: 16   Фаза 2: 20   Фаза 3: 24   Фаза 4: 32
+    /// Меняется через AiProtocol (аргумент --map-size:N).
+    /// </summary>
+    public int MapSize { get; set; } = 16;
+
     public GameState State { get; private set; } = null!;
 
     // ── Reset ─────────────────────────────────────────────────────────────────
     public GameState Reset(int seed = 0)
     {
-        var map    = generator.Generate(32, 32, seed);
+        var map    = generator.Generate(MapSize, MapSize, seed);
         int spawnX = map.PlayerSpawnX;
         int spawnY = map.PlayerSpawnY;
 
@@ -49,7 +56,7 @@ public class DungeonEnv
 
         var prev = CloneState(State);
 
-        State.LastAction = action;   // для визуализации хитбоксов атак
+        State.LastAction = action;
 
         movement.Update(State, action, 0f);
         combat.Update(State, action);
@@ -76,26 +83,32 @@ public class DungeonEnv
 
     // ── Спавн врагов ──────────────────────────────────────────────────────────
     /// <summary>
-    /// Количество врагов в каждой комнате зависит от её площади:
-    ///   capacity = clamp(floor(W * H / EnemyMinDist²), 0, MaxEnemiesPerRoom)
+    /// Параметры спавна адаптируются к размеру карты.
     ///
-    /// EnemyMinDist — минимальное манхэттенское расстояние между спавн-точками
-    /// врагов в одной комнате (параметр "enemy distance = n").
+    /// EnemyMinDist       = max(3, MapSize / 6)   — дистанция между врагами
+    /// SafeDistFromPlayer = max(4, MapSize / 5)   — безопасная зона вокруг спавна
+    /// SafeDistFromExit   = max(2, MapSize / 8)   — безопасная зона вокруг выхода
     ///
-    /// Типы врагов чередуются циклически: Walking → Flying → Crawling → ...
-    /// Flying может появляться над ямами, остальные — только на Floor.
+    ///   MapSize=16: EnemyMinDist=3, SafePlayer=4, SafeExit=2
+    ///   MapSize=20: EnemyMinDist=3, SafePlayer=4, SafeExit=2
+    ///   MapSize=24: EnemyMinDist=4, SafePlayer=4, SafeExit=3
+    ///   MapSize=32: EnemyMinDist=5, SafePlayer=6, SafeExit=4
     /// </summary>
-    private const int EnemyMinDist       = 4;   // ← «enemy distance = n»
-    private const int MaxEnemiesPerRoom  = 3;
-    private const int SafeDistFromPlayer = 6;
-    private const int SafeDistFromExit   = 4;
+    private const int MaxEnemiesPerRoom = 2;
 
-    private static List<Enemy> SpawnEnemies(DungeonMap map, int spawnX, int spawnY, int seed)
+    private int EnemyMinDist       => Math.Max(5, MapSize / 6);
+    private int SafeDistFromPlayer => Math.Max(4, MapSize / 5);
+    private int SafeDistFromExit   => Math.Max(2, MapSize / 8);
+
+    private List<Enemy> SpawnEnemies(DungeonMap map, int spawnX, int spawnY, int seed)
     {
         var rng    = new Random(seed + 9999);
         var result = new List<Enemy>();
 
-        // Фабрики врагов в порядке чередования
+        int enemyMinDist       = EnemyMinDist;
+        int safeDistFromPlayer = SafeDistFromPlayer;
+        int safeDistFromExit   = SafeDistFromExit;
+
         Func<Enemy>[] factories =
         [
             () => new WalkingEnemy(),
@@ -104,52 +117,44 @@ public class DungeonEnv
         ];
         int typeIndex = 0;
 
-        // Глобальный список размещённых позиций (враги не накладываются)
         var allPlaced = new List<(int x, int y)>();
 
         foreach (var (roomX, roomY, roomW, roomH) in map.Rooms)
         {
-            // Вместимость комнаты по дистанции между врагами
             int capacity = Math.Min(
                 MaxEnemiesPerRoom,
-                (roomW * roomH) / (EnemyMinDist * EnemyMinDist));
+                (roomW * roomH) / (enemyMinDist * enemyMinDist));
 
             if (capacity <= 0) continue;
 
-            // Кандидаты: Floor и Pit-тайлы внутри комнаты,
-            // достаточно далеко от игрока и выхода
             var candidates = new List<(int x, int y)>();
             for (int x = roomX; x < roomX + roomW; x++)
             for (int y = roomY; y < roomY + roomH; y++)
             {
                 var tile = map.Tiles[x, y];
                 if (tile != TileType.Floor && tile != TileType.Pit) continue;
-                if (Math.Abs(x - spawnX)    + Math.Abs(y - spawnY)    < SafeDistFromPlayer) continue;
-                if (Math.Abs(x - map.ExitX) + Math.Abs(y - map.ExitY) < SafeDistFromExit)   continue;
+                if (Math.Abs(x - spawnX)    + Math.Abs(y - spawnY)    < safeDistFromPlayer) continue;
+                if (Math.Abs(x - map.ExitX) + Math.Abs(y - map.ExitY) < safeDistFromExit)   continue;
                 candidates.Add((x, y));
             }
             Shuffle(candidates, rng);
 
-            // Размещаем врагов с соблюдением EnemyMinDist
             int placed = 0;
             foreach (var (cx, cy) in candidates)
             {
                 if (placed >= capacity) break;
 
-                // Минимальное расстояние до всех уже размещённых врагов
                 bool tooClose = false;
                 foreach (var (px, py) in allPlaced)
                 {
-                    if (Math.Abs(px - cx) + Math.Abs(py - cy) < EnemyMinDist)
+                    if (Math.Abs(px - cx) + Math.Abs(py - cy) < enemyMinDist)
                     { tooClose = true; break; }
                 }
                 if (tooClose) continue;
 
-                // Выбираем тип и проверяем совместимость с тайлом
                 var factory = factories[typeIndex % factories.Length];
                 var enemy   = factory();
 
-                // Не-летающие не могут спавниться на яме
                 if (enemy is not FlyingEnemy && map.Tiles[cx, cy] == TileType.Pit)
                     continue;
 
@@ -175,7 +180,7 @@ public class DungeonEnv
         }
     }
 
-    // ── Глубокая копия (использует полиморфный Clone()) ───────────────────────
+    // ── Глубокая копия ────────────────────────────────────────────────────────
     private static GameState CloneState(GameState s) => new()
     {
         Map    = s.Map,
@@ -185,7 +190,6 @@ public class DungeonEnv
             HP = s.Player.HP, MaxHP = s.Player.MaxHP,
             Facing = s.Player.Facing
         },
-        // Каждый подкласс знает, как себя копировать
         Enemies    = s.Enemies.Select(e => e.Clone()).ToList(),
         StepCount  = s.StepCount,
         IsTerminal = s.IsTerminal

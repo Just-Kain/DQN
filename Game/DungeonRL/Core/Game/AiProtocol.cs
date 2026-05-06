@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using SFML.Graphics;
@@ -9,11 +7,33 @@ using SFML.Window;
 /// <summary>
 /// Протокол взаимодействия с Python DQN-агентом через stdin/stdout.
 ///
-/// Запуск: dotnet run -- --ai
+/// Аргумент запуска:
+///   --map-size:N    — задать размер карты (по умолчанию 16, используется курикулумом)
 ///
-/// Формат:
-///   C# → Python : JSON-строка состояния (одна строка)
-///   Python → C# : целое число действия (0-7) или "reset"
+/// Команды Python → C#:
+///   "reset"       — начать новый эпизод (C# управляет seed сам)
+///   "reset &lt;N&gt;"   — начать эпизод с конкретным seed N (для воспроизведения)
+///   "0" … "6"     — выполнить действие ActionType (Idle исключён из пространства агента)
+///
+/// Ответ C# → Python (одна JSON-строка):
+/// {
+///   "player_x": int,    "player_y": int,
+///   "player_hp": int,
+///   "exit_x": int,      "exit_y": int,
+///   "map": int[][],     — матрица [H][W] с закодированными сущностями
+///   "reward": float,    "done": bool,  "step": int
+/// }
+///
+/// Кодировка ячеек матрицы map[y][x]:
+///   0 = Empty (пусто / за границей)
+///   1 = Wall  (стена)
+///   2 = Floor (пол)
+///   3 = Exit  (выход)
+///   4 = Pit   (яма)
+///   5 = WalkingEnemy  (живой)
+///   6 = FlyingEnemy   (живой)
+///   7 = CrawlingEnemy (живой)
+///   8 = Player
 /// </summary>
 public static class AiProtocol
 {
@@ -24,10 +44,42 @@ public static class AiProtocol
         WriteIndented               = false
     };
 
-    // ── Главный цикл ─────────────────────────────────────────────────────────
-    public static void Run()
+    // ── Разбор --map-size:N ───────────────────────────────────────────────────
+    private static int ParseMapSize(string[] args, int defaultSize = 16)
     {
-        var env  = new DungeonEnv();
+        foreach (var arg in args)
+        {
+            const string prefix = "--map-size:";
+            if (arg.StartsWith(prefix, StringComparison.Ordinal)
+                && int.TryParse(arg.AsSpan(prefix.Length), out int size)
+                && size >= 8 && size <= 64)
+            {
+                return size;
+            }
+        }
+        return defaultSize;
+    }
+
+    // ── Разбор команды reset / reset <N> ────────────────────────────────────
+    private static bool TryParseReset(string line, ref int seed)
+    {
+        if (line == "reset")
+            return true;
+
+        if (line.StartsWith("reset ", StringComparison.Ordinal)
+            && int.TryParse(line.AsSpan(6), out int newSeed))
+        {
+            seed = newSeed;
+            return true;
+        }
+
+        return false;
+    }
+
+    // ── Главный цикл (--ai) ───────────────────────────────────────────────────
+    public static void Run(string[] args)
+    {
+        var env  = new DungeonEnv { MapSize = ParseMapSize(args) };
         int seed = 75;
 
         while (true)
@@ -38,11 +90,11 @@ public static class AiProtocol
             while (true)
             {
                 string? line = Console.ReadLine();
-                if (line is null) return; // stdin закрыт — выходим
+                if (line is null) return;
 
                 line = line.Trim();
 
-                if (line == "reset") break; // принудительный сброс от агента
+                if (TryParseReset(line, ref seed)) break;
 
                 if (!int.TryParse(line, out int idx)) continue;
                 idx = Math.Clamp(idx, 0, 7);
@@ -50,34 +102,21 @@ public static class AiProtocol
                 var result = env.Step((ActionType)idx);
                 SendState(result.NextState, result.Reward, result.Done);
 
-                if (result.Done)
-                {
-                    if(result.Reward > 0) seed++;
-                    break;
-                }
+                if (result.Done) break;
 
-                if(result.StepIteration >= 1_000_000)
-                { 
-                    break;
-                }
+                if (result.StepIteration >= 1_000_000) break;
             }
         }
     }
 
-    // ── Визуальный AI-режим: SFML окно + JSON-протокол ────────────────────────
-    /// <summary>
-    /// Запускается по флагу --ai-visual.
-    /// Читает действия из stdin (как Run), но рендерит каждый шаг в SFML-окно.
-    /// Позволяет наблюдать за игрой агента визуально.
-    /// </summary>
-    public static void RunVisual(RenderWindow window, Renderer renderer)
+    // ── Визуальный AI-режим (--ai-visual) ────────────────────────────────────
+    public static void RunVisual(RenderWindow window, Renderer renderer, string[] args)
     {
-        var env  = new DungeonEnv();
+        var env  = new DungeonEnv { MapSize = ParseMapSize(args) };
         int seed = 75;
 
         while (window.IsOpen)
         {
-            // Диспетчер событий — иначе окно не реагирует и ОС его "убьёт"
             window.DispatchEvents();
 
             var state = env.Reset(seed);
@@ -89,23 +128,20 @@ public static class AiProtocol
                 window.DispatchEvents();
 
                 string? line = Console.ReadLine();
-                if (line is null) return;   // stdin закрыт Python-ом
+                if (line is null) return;
                 line = line.Trim();
 
-                if (line == "reset") break;
+                if (TryParseReset(line, ref seed)) break;
                 if (!int.TryParse(line, out int idx)) continue;
                 idx = Math.Clamp(idx, 0, 7);
 
                 var result = env.Step((ActionType)idx);
-
-                // Рендерим КАЖДЫЙ шаг — агент виден в окне
                 renderer.Draw(result.NextState);
-
                 SendState(result.NextState, result.Reward, result.Done);
 
                 if (result.Done)
                 {
-                    if (result.Reward > 0) seed++;
+                    // if (result.Reward > 0) seed++;
                     break;
                 }
             }
@@ -117,63 +153,79 @@ public static class AiProtocol
     {
         var dto = new StateDto
         {
-            PlayerX      = state.Player.X,
-            PlayerY      = state.Player.Y,
-            PlayerHp     = state.Player.HP,
-            PlayerMaxHp  = state.Player.MaxHP,
-            PlayerFacing = (int)state.Player.Facing,
-            Enemies      = state.Enemies.Select(e => new EnemyDto
-            {
-                X     = e.X,
-                Y     = e.Y,
-                Hp    = e.HP,
-                Type  = (int)e.Type,
-                Alive = e.IsAlive
-            }).ToList(),
-            ExitX  = state.Map.ExitX,
-            ExitY  = state.Map.ExitY,
-            Map    = FlattenMap(state.Map),
-            Reward = reward,
-            Done   = done,
-            Step   = state.StepCount
+            PlayerX  = state.Player.X,
+            PlayerY  = state.Player.Y,
+            PlayerHp = state.Player.HP,
+            ExitX    = state.Map.ExitX,
+            ExitY    = state.Map.ExitY,
+            Map      = BuildEntityMap(state),
+            Reward   = reward,
+            Done     = done,
+            Step     = state.StepCount
         };
 
         Console.WriteLine(JsonSerializer.Serialize(dto, Opts));
         Console.Out.Flush();
     }
 
-    private static int[] FlattenMap(DungeonMap map)
+    // ── Построение entity-матрицы ────────────────────────────────────────────
+    private static int[][] BuildEntityMap(GameState state)
     {
-        var flat = new int[map.Width * map.Height];
+        var map = state.Map;
+        var result = new int[map.Height][];
+
         for (int y = 0; y < map.Height; y++)
-        for (int x = 0; x < map.Width; x++)
-            flat[y * map.Width + x] = (int)map.Tiles[x, y];
-        return flat;
+        {
+            result[y] = new int[map.Width];
+            for (int x = 0; x < map.Width; x++)
+            {
+                result[y][x] = map.Tiles[x, y] switch
+                {
+                    TileType.Wall  => 1,
+                    TileType.Floor => 2,
+                    TileType.Exit  => 3,
+                    TileType.Pit   => 4,
+                    _              => 0
+                };
+            }
+        }
+
+        foreach (var e in state.Enemies)
+        {
+            if (!e.IsAlive) continue;
+
+            int code = e.Type switch
+            {
+                EnemyType.Walking  => 5,
+                EnemyType.Flying   => 6,
+                EnemyType.Crawling => 7,
+                _                  => 5
+            };
+
+            if (e.Y >= 0 && e.Y < map.Height && e.X >= 0 && e.X < map.Width)
+                result[e.Y][e.X] = code;
+        }
+
+        if (state.Player.Y >= 0 && state.Player.Y < map.Height &&
+            state.Player.X >= 0 && state.Player.X < map.Width)
+        {
+            result[state.Player.Y][state.Player.X] = 8;
+        }
+
+        return result;
     }
 
-    // ── DTO-классы ────────────────────────────────────────────────────────────
+    // ── DTO ───────────────────────────────────────────────────────────────────
     private sealed class StateDto
     {
-        public int            PlayerX      { get; set; }
-        public int            PlayerY      { get; set; }
-        public int            PlayerHp     { get; set; }
-        public int            PlayerMaxHp  { get; set; }
-        public int            PlayerFacing { get; set; }
-        public List<EnemyDto> Enemies      { get; set; } = new();
-        public int            ExitX        { get; set; }
-        public int            ExitY        { get; set; }
-        public int[]          Map          { get; set; } = Array.Empty<int>();
-        public float          Reward       { get; set; }
-        public bool           Done         { get; set; }
-        public int            Step         { get; set; }
-    }
-
-    private sealed class EnemyDto
-    {
-        public int  X     { get; set; }
-        public int  Y     { get; set; }
-        public int  Hp    { get; set; }
-        public int  Type  { get; set; }
-        public bool Alive { get; set; }
+        public int     PlayerX  { get; set; }
+        public int     PlayerY  { get; set; }
+        public int     PlayerHp { get; set; }
+        public int     ExitX    { get; set; }
+        public int     ExitY    { get; set; }
+        public int[][] Map      { get; set; } = Array.Empty<int[]>();
+        public float   Reward   { get; set; }
+        public bool    Done     { get; set; }
+        public int     Step     { get; set; }
     }
 }

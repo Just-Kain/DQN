@@ -1,8 +1,9 @@
 // DungeonRL — точка входа
 // Режимы запуска:
-//   dotnet run                     → игровое окно (WASD + E/Q/Space/R)
-//   dotnet run -- --ai             → AI-режим: JSON-протокол через stdin/stdout (без окна)
-//   dotnet run -- --ai-visual      → AI-режим С SFML-окном (агент виден визуально)
+//   dotnet run                              → игровое окно (WASD + E/Q/Space/R)
+//   dotnet run -- --ai                      → AI-режим: JSON-протокол через stdin/stdout
+//   dotnet run -- --ai --map-size:16        → AI-режим, карта 16×16 (курикулум фаза 1)
+//   dotnet run -- --ai-visual --map-size:20 → AI-визуальный режим, карта 20×20
 
 using SFML.Graphics;
 using SFML.Window;
@@ -11,11 +12,11 @@ using SFML.System;
 // ── AI-режим (без окна) ───────────────────────────────────────────────────────
 if (args.Contains("--ai"))
 {
-    AiProtocol.Run();
+    AiProtocol.Run(args);
     return;
 }
 
-// ── Общие ресурсы (нужны и для игры, и для --ai-visual) ──────────────────────
+// ── Общие ресурсы ─────────────────────────────────────────────────────────────
 static SpriteAtlas CreateAtlas() => new SpriteAtlas
 {
     Floor         = new Texture("assets/floor.png"),
@@ -28,7 +29,7 @@ static SpriteAtlas CreateAtlas() => new SpriteAtlas
     EnemyCrawling = new Texture("assets/crawl.png"),
 };
 
-// ── AI-визуальный режим: SFML-окно + JSON-протокол ────────────────────────────
+// ── AI-визуальный режим ───────────────────────────────────────────────────────
 if (args.Contains("--ai-visual"))
 {
     var aiWindow = new RenderWindow(
@@ -39,7 +40,7 @@ if (args.Contains("--ai-visual"))
     var aiAtlas    = CreateAtlas();
     var aiRenderer = new Renderer(aiWindow, aiAtlas);
 
-    AiProtocol.RunVisual(aiWindow, aiRenderer);
+    AiProtocol.RunVisual(aiWindow, aiRenderer, args);
     return;
 }
 
@@ -76,6 +77,7 @@ while (window.IsOpen)
     if (Keyboard.IsKeyPressed(Keyboard.Key.E))     action = ActionType.MeleeAttack;
     if (Keyboard.IsKeyPressed(Keyboard.Key.Q))     action = ActionType.ArrowShot;
     if (Keyboard.IsKeyPressed(Keyboard.Key.Space)) action = ActionType.Dash;
+    if (Keyboard.IsKeyPressed(Keyboard.Key.X))     break;
 
     if (Keyboard.IsKeyPressed(Keyboard.Key.R))
     {

@@ -1,7 +1,17 @@
 /// <summary>
-/// Система врагов — дискретное движение + урон с кулдауном + зона видимости.
+/// Система врагов — дискретное движение + урон с кулдауном + зона видимости + скорость.
 ///
-/// Правила движения:
+/// Правила движения (энергетический аккумулятор):
+///   Каждый игровой шаг:
+///     e.MoveEnergy += e.Speed / player.Speed
+///   Если MoveEnergy ≥ 1.0 — враг совершает ход (движение + атака), MoveEnergy -= 1.0.
+///   Иначе — только тикает кулдаун атаки.
+///
+///   Соотношения скоростей:
+///     Walking  (4/5 = 0.80) — чуть медленнее игрока, можно убежать.
+///     Flying   (5/5 = 1.00) — такая же скорость, как у игрока.
+///     Crawling (3/5 = 0.60) — заметно медленнее, легко убежать.
+///
 ///   • Враг движется к игроку ТОЛЬКО если:
 ///       1. Манхэттенское расстояние ≤ e.VisionRange.
 ///       2. Нет стены на пути (проверка через Bresenham LOS).
@@ -10,7 +20,7 @@
 ///   • Несколько врагов на одной клетке запрещено, если !e.CanStack.
 ///
 /// Правила урона:
-///   • Наносится, когда dist == 1 (вплотную).
+///   • Наносится, когда dist == 1 (вплотную) и враг получил ход в этом шаге.
 ///   • Не чаще одного раза в AttackCooldownSteps шагов (~1 сек при 0.12 с/шаг).
 /// </summary>
 public class EnemySystem
@@ -19,12 +29,27 @@ public class EnemySystem
 
     public void Update(GameState state, float _dt)
     {
+        float playerSpeed = state.Player.Speed;   // базовая скорость (5)
+
         foreach (var e in state.Enemies)
         {
             if (!e.IsAlive) continue;
 
-            TryMoveTowardPlayer(state, e);
-            TryDamagePlayer(state, e);
+            // Накапливаем энергию движения пропорционально скорости
+            e.MoveEnergy += e.Speed / playerSpeed;
+
+            if (e.MoveEnergy >= 1.0f)
+            {
+                e.MoveEnergy -= 1.0f;          // тратим накопленную энергию
+
+                TryMoveTowardPlayer(state, e);
+                TryDamagePlayer(state, e);
+            }
+            else
+            {
+                // Враг не двигается в этот шаг, но кулдаун атаки всё равно тикает
+                if (e.AttackCooldown > 0) e.AttackCooldown--;
+            }
         }
     }
 

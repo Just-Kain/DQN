@@ -1,129 +1,243 @@
 """
-game_interface.py — Интерфейс с C# игрой через subprocess (stdin/stdout JSON).
+game_interface.py — Надёжный интерфейс с C# через subprocess.
 
-Запускает  dotnet run --project ../Game/DungeonRL/DungeonRL.csproj -- --ai
-или        dotnet run --project ../Game/DungeonRL/DungeonRL.csproj -- --ai-visual
-и общается по протоколу:
-  → отправляем: целое число 0-7 (индекс ActionType) или "reset" + '\\n'
-  ← получаем:   JSON-строка состояния
+Протокол:
+  → Python: строка действия (0-6) или "reset [seed]" + LF
+  ← C#:     JSON-строка состояния + LF
 
-Наблюдение (85 признаков):
-  [0:81]  — локальный вид 9×9 вокруг игрока (нормализованные 0..1)
-  [81:83] — (dx_exit/W, dy_exit/H) до выхода
-  [83]    — hp_norm
-  [84]    — step_norm
+Формат JSON (C# → Python):
+  {
+    "player_x": int, "player_y": int,
+    "player_hp": int,
+    "exit_x": int, "exit_y": int,
+    "map": [[int, ...], ...],   ← матрица [H][W], сущности встроены в тайлы
+    "reward": float, "done": bool, "step": int
+  }
 
-Устойчивость:
-  • Перед каждым write проверяем proc.poll() — процесс жив?
-  • readline() выполняется в daemon-потоке с таймаутом RECV_TIMEOUT сек.
-  • При BrokenPipeError / таймауте / EOF — процесс перезапускается.
-  • step() при сбое возвращает (zeros, CRASH_REWARD, True) — эпизод завершается.
+Кодировка ячеек матрицы map[y][x]:
+  0=Empty  1=Wall  2=Floor  3=Exit  4=Pit
+  5=WalkingEnemy  6=FlyingEnemy  7=CrawlingEnemy  8=Player
+
+Наблюдение (357 признаков):
+  [0..288]   — 17×17 локальный вид (289 пикселей), нормализован / ENTITY_MAX
+  [289..352] — 8×8 мини-карта (64 пикселя), avg-pooling полной карты / ENTITY_MAX
+  [353]      — (exit_x − px) / map_w     ∈ [−1, 1]
+  [354]      — (exit_y − py) / map_h     ∈ [−1, 1]
+  [355]      — player_hp / MAX_HP        ∈ [0, 1]
+  [356]      — step / MAX_STEPS          ∈ [0, 1]
+
+Защита от зависаний (Windows-специфика):
+  • _send_raw()  — поток с таймаутом SEND_TIMEOUT сек.
+  • _recv_json() — поток с таймаутом RECV_TIMEOUT сек.
+  • _kill_tree() — taskkill /F /T убивает ДЕРЕВО процессов.
+  • --no-build   — перезапуск без рекомпиляции.
 """
 
 import json
+import platform
 import subprocess
 import threading
 import time
 import numpy as np
 from typing import Tuple
+import os
 
-# ── Путь к проекту ────────────────────────────────────────────────────────────
-PROJECT_PATH = "../Game/DungeonRL/DungeonRL.csproj"
+# ── Путь к проекту ─────────────────────────────────────────────────────────
+_SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
+PROJECT_PATH = os.path.normpath(os.path.join(_SCRIPT_DIR, "..", "Game", "DungeonRL", "DungeonRL.csproj"))
+PROJECT_DIR  = os.path.dirname(PROJECT_PATH)
 
-# ── Размеры наблюдения ────────────────────────────────────────────────────────
-MAP_W = MAP_H = 32
-VIEW  = 9
-HALF  = VIEW // 2
+# ── Параметры наблюдения ───────────────────────────────────────────────────
+VIEW      = 17          # 17×17 локальный вид (8.5 тайлов в каждую сторону)
+HALF      = VIEW // 2   # = 8
+MINI_SIZE = 8           # размер глобальной мини-карты (8×8)
 
-# Коды тайлов/существ в наблюдении
-TILE_WALL     = 0
-TILE_FLOOR    = 1
-TILE_EXIT     = 2
-TILE_PIT      = 3
-ENEMY_WALK    = 4
-ENEMY_FLY     = 5
-ENEMY_CRAWL   = 6
-ENTITY_PLAYER = 7
+# OBS_SIZE = 17×17 + 8×8 + 4 = 289 + 64 + 4 = 357
+# (должен совпадать с model.py OBS_SIZE)
+OBS_SIZE = VIEW * VIEW + MINI_SIZE * MINI_SIZE + 4
 
-MAX_STEPS    = 500        # совпадает с DungeonEnv.MaxSteps
-MAX_HP       = 10
+# Кодировка ячеек entity-матрицы (совпадает с AiProtocol.cs / BuildEntityMap)
+TILE_EMPTY    = 0
+TILE_WALL     = 1
+TILE_FLOOR    = 2
+TILE_EXIT     = 3
+TILE_PIT      = 4
+ENEMY_WALK    = 5
+ENEMY_FLY     = 6
+ENEMY_CRAWL   = 7
+ENTITY_PLAYER = 8
+ENTITY_MAX    = 8   # делитель нормализации
 
-# ── Надёжность ────────────────────────────────────────────────────────────────
-RECV_TIMEOUT  = 30.0      # секунд ожидания ответа от C# до рестарта
-CRASH_REWARD  = -5.0      # штраф за крэш C# (эпизод завершается)
-MAX_RESTARTS  = 10        # максимум авторестартов подряд (потом исключение)
+MAX_STEPS      = 1000
+MAX_HP         = 10
+_CS_SEED_START = 75
+SEED_STEP      = 0
+
+# ── Таймауты и лимиты ──────────────────────────────────────────────────────
+SEND_TIMEOUT  = 10.0
+RECV_TIMEOUT  = 30.0
+RESTART_DELAY = 2.0
+MAX_RESTARTS  = 5
+CRASH_REWARD  = -5.0
 
 
 class GameInterface:
-    def __init__(self, seed_start: int = 0, visual_mode: bool = False):
+    def __init__(self, seed_start: int = 0, visual_mode: bool = False,
+                 map_size: int = 16):
         """
-        Parameters
-        ----------
-        seed_start : int
-            Начальный сид генерации карты.
-        visual_mode : bool
-            True  → запускает C# с флагом --ai-visual (открывает SFML-окно).
-            False → запускает с --ai (без окна, только JSON).
+        map_size — размер карты (передаётся C# через --map-size:N).
+        Курикулум меняет его по мере роста win_rate:
+          Фаза 1: 16   Фаза 2: 20   Фаза 3: 24   Фаза 4: 32
         """
-        self._seed          = seed_start
-        self._visual_mode   = visual_mode
-        self._restarts      = 0
-        self._proc          = self._launch()
-        self._state: dict   = {}
+        self._visual_mode  = visual_mode
+        self._map_size     = map_size
+        self._restarts     = 0
+        self._built        = False
+        self._state: dict  = {}
 
-    # ── Запуск C# процесса ────────────────────────────────────────────────────
+        self._cs_seed      = _CS_SEED_START
+        self._episode_seed = _CS_SEED_START
+
+        self._build_once()
+        self._proc = self._launch()
+
+    # ── Сборка проекта (один раз при старте) ──────────────────────────────
+    def _build_once(self) -> None:
+        if self._built:
+            return
+        print("[GameInterface] dotnet build … ", end="", flush=True)
+        try:
+            result = subprocess.run(
+                ["dotnet", "build", PROJECT_PATH,
+                 "-c", "Debug", "--nologo", "-v", "q"],
+                capture_output=True, text=True, timeout=120,
+                cwd=PROJECT_DIR,
+            )
+            if result.returncode == 0:
+                print("OK")
+                self._built = True
+            else:
+                print(f"ОШИБКА:\n{result.stderr[-600:]}")
+        except Exception as exc:
+            print(f"не удалось: {exc}")
+
+    # ── Запуск процесса ────────────────────────────────────────────────────
     def _launch(self) -> subprocess.Popen:
         flag = "--ai-visual" if self._visual_mode else "--ai"
-        return subprocess.Popen(
-            ["dotnet", "run", "--project", PROJECT_PATH, "--", flag],
+        cmd  = ["dotnet", "run", "--project", PROJECT_PATH]
+        if self._built:
+            cmd.append("--no-build")
+        # Передаём флаг режима и размер карты для курикулума
+        cmd += ["--", flag, f"--map-size:{self._map_size}"]
+
+        kwargs: dict = dict(
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
             text=True,
             bufsize=1,
+            cwd=PROJECT_DIR,
         )
+        if platform.system() == "Windows":
+            kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
 
-    # ── Перезапуск упавшего процесса ─────────────────────────────────────────
-    def _restart_proc(self) -> None:
-        self._restarts += 1
-        if self._restarts > MAX_RESTARTS:
-            raise RuntimeError(
-                f"C# процесс упал {MAX_RESTARTS} раз подряд — остановка."
-            )
-        print(f"\n[GameInterface] C# упал, перезапуск #{self._restarts}…", flush=True)
+        proc = subprocess.Popen(cmd, **kwargs)
+        self._drain_stderr(proc)
+        return proc
+
+    # ── Слив stderr ───────────────────────────────────────────────────────
+    def _drain_stderr(self, proc: subprocess.Popen) -> None:
+        lines: list[str] = []
+
+        def _reader():
+            try:
+                for line in proc.stderr:
+                    lines.append(line)
+            except Exception:
+                pass
+            rc = proc.poll()
+            if rc not in (None, 0) and lines:
+                tail = "".join(lines[-20:]).strip()
+                print(f"\n[GameInterface] C# stderr:\n{tail}\n", flush=True)
+
+        t = threading.Thread(target=_reader, daemon=True, name="stderr-drain")
+        t.start()
+
+    # ── Убийство ДЕРЕВА процессов ──────────────────────────────────────────
+    def _kill_tree(self) -> None:
+        pid = self._proc.pid
+        if platform.system() == "Windows":
+            try:
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(pid)],
+                    capture_output=True, timeout=8
+                )
+            except Exception:
+                pass
+        else:
+            import signal
+            try:
+                os.killpg(os.getpgid(pid), signal.SIGKILL)
+            except Exception:
+                pass
         try:
-            self._proc.terminate()
             self._proc.wait(timeout=5)
         except Exception:
             pass
-        time.sleep(1.0)   # небольшая пауза перед рестартом
+
+    # ── Перезапуск ────────────────────────────────────────────────────────
+    def _restart(self) -> None:
+        self._restarts += 1
+        if self._restarts > MAX_RESTARTS:
+            raise RuntimeError(
+                f"[GameInterface] C# упал {MAX_RESTARTS} раз подряд — "
+                "обучение остановлено."
+            )
+        print(
+            f"\n[GameInterface] Перезапуск C# ({self._restarts}/{MAX_RESTARTS})…",
+            flush=True
+        )
+        self._kill_tree()
+        time.sleep(RESTART_DELAY)
+        self._cs_seed = _CS_SEED_START
         self._proc = self._launch()
 
-    # ── Reset ─────────────────────────────────────────────────────────────────
+    # ── Reset ─────────────────────────────────────────────────────────────
     def reset(self) -> np.ndarray:
-        """
-        Отправляет 'reset', ждёт начального состояния.
-        При сбое перезапускает процесс и повторяет.
-        """
         for attempt in range(3):
             try:
+                self._episode_seed = self._cs_seed
                 self._send_raw("reset")
                 self._state = self._recv_json()
-                self._restarts = 0          # успешный обмен — сбрасываем счётчик
+                self._restarts = 0
                 return self._make_obs(self._state)
-            except (TimeoutError, EOFError, RuntimeError, json.JSONDecodeError,
-                    BrokenPipeError, OSError) as exc:
-                print(f"\n[GameInterface] reset сбой (попытка {attempt+1}): {exc}", flush=True)
-                self._restart_proc()
-        # Если все попытки провалились — возвращаем нулевое наблюдение
-        return np.zeros(VIEW * VIEW + 4, dtype=np.float32)
+            except Exception as exc:
+                print(f"\n[GameInterface] reset сбой (попытка {attempt+1}): {exc}",
+                      flush=True)
+                self._restart()
+        return np.zeros(OBS_SIZE, dtype=np.float32)
 
-    # ── Step ──────────────────────────────────────────────────────────────────
+    def reset_to_seed(self, seed: int) -> np.ndarray:
+        for attempt in range(3):
+            try:
+                self._episode_seed = seed
+                self._cs_seed      = seed
+                self._send_raw(f"reset {seed}")
+                self._state = self._recv_json()
+                self._restarts = 0
+                return self._make_obs(self._state)
+            except Exception as exc:
+                print(f"\n[GameInterface] reset_to_seed({seed}) сбой "
+                      f"(попытка {attempt+1}): {exc}", flush=True)
+                self._restart()
+        return np.zeros(OBS_SIZE, dtype=np.float32)
+
+    @property
+    def episode_seed(self) -> int:
+        return self._episode_seed
+
+    # ── Step ──────────────────────────────────────────────────────────────
     def step(self, action: int) -> Tuple[np.ndarray, float, bool]:
-        """
-        Отправляет действие (0-7), возвращает (obs, reward, done).
-        При сбое C# возвращает (zeros, CRASH_REWARD, True).
-        """
         try:
             self._send_raw(str(action))
             self._state = self._recv_json()
@@ -131,73 +245,92 @@ class GameInterface:
             obs    = self._make_obs(self._state)
             reward = float(self._state.get("reward", 0.0))
             done   = bool(self._state.get("done", True))
+            if done and reward > 0:
+                self._cs_seed += SEED_STEP
             return obs, reward, done
-        except (TimeoutError, EOFError, RuntimeError, json.JSONDecodeError,
-                BrokenPipeError, OSError) as exc:
+        except Exception as exc:
             print(f"\n[GameInterface] step сбой: {exc}", flush=True)
-            self._restart_proc()
-            zeros = np.zeros(VIEW * VIEW + 4, dtype=np.float32)
-            return zeros, CRASH_REWARD, True   # завершаем эпизод
+            self._restart()
+            return np.zeros(OBS_SIZE, dtype=np.float32), CRASH_REWARD, True
 
-    # ── Последнее известное состояние (для визуализатора) ─────────────────────
     @property
     def last_state(self) -> dict:
         return self._state
 
-    # ── Построение вектора наблюдения ────────────────────────────────────────
+    # ── Построение наблюдения ─────────────────────────────────────────────
     def _make_obs(self, s: dict) -> np.ndarray:
-        px, py   = s["player_x"], s["player_y"]
-        flat_map = s["map"]
+        """
+        Строит вектор наблюдения из entity-матрицы C#.
 
-        # --- Карта врагов ---
-        enemy_at: dict[tuple, int] = {}
-        for e in s.get("enemies", []):
-            if e["alive"]:
-                code = ENEMY_WALK + e["type"]
-                enemy_at[(e["x"], e["y"])] = code
+        Итоговый вектор (357 признаков):
+          [0..288]   — 17×17 local view (нормализован / ENTITY_MAX)
+          [289..352] — 8×8 мини-карта (avg-pooling, нормализован / ENTITY_MAX)
+          [353]      — (exit_x − px) / map_w
+          [354]      — (exit_y − py) / map_h
+          [355]      — player_hp / MAX_HP
+          [356]      — step / MAX_STEPS
+        """
+        px, py = s["player_x"], s["player_y"]
+        map2d  = s["map"]             # list[list[int]] — [H][W]
+        map_h  = len(map2d)
+        map_w  = len(map2d[0]) if map_h > 0 else self._map_size
 
-        # --- Локальный вид 9×9 ---
+        # ── 17×17 локальный вид ─────────────────────────────────────────────
         view = np.zeros(VIEW * VIEW, dtype=np.float32)
         idx  = 0
         for dy in range(-HALF, HALF + 1):
             for dx in range(-HALF, HALF + 1):
                 tx, ty = px + dx, py + dy
-
-                if not (0 <= tx < MAP_W and 0 <= ty < MAP_H):
-                    val = TILE_WALL
-                elif (tx, ty) == (px, py):
-                    val = ENTITY_PLAYER
-                elif (tx, ty) in enemy_at:
-                    val = enemy_at[(tx, ty)]
+                if 0 <= ty < map_h and 0 <= tx < map_w:
+                    val = map2d[ty][tx]
                 else:
-                    raw = flat_map[ty * MAP_W + tx]
-                    val = max(0, raw - 1)
-
-                view[idx] = val / 7.0
+                    val = TILE_WALL   # за границей = стена
+                view[idx] = val / ENTITY_MAX
                 idx += 1
 
-        # --- Дополнительные признаки ---
+        # ── 8×8 глобальная мини-карта (avg-pooling) ─────────────────────────
+        # Вся карта → нормализованный массив (H×W) → avg-pool до (8×8)
+        full_map = np.array(map2d, dtype=np.float32) / ENTITY_MAX  # (H, W)
+        mini_map = _avg_pool_2d(full_map, MINI_SIZE, MINI_SIZE)     # (8, 8)
+        mini_flat = mini_map.flatten()                               # (64,)
+
+        # ── Скалярные признаки ───────────────────────────────────────────────
         ex, ey    = s["exit_x"], s["exit_y"]
-        dx_exit   = (ex - px) / MAP_W
-        dy_exit   = (ey - py) / MAP_H
         hp_norm   = s["player_hp"] / MAX_HP
         step_norm = s.get("step", 0) / MAX_STEPS
 
-        return np.concatenate([view, [dx_exit, dy_exit, hp_norm, step_norm]])
+        return np.concatenate([
+            view,                                           # 289
+            mini_flat,                                      # 64
+            [(ex - px) / map_w, (ey - py) / map_h,        # 2
+             hp_norm, step_norm],                           # 2  → total 357
+        ])
 
-    # ── Протокол ─────────────────────────────────────────────────────────────
+    # ── Низкоуровневый протокол ────────────────────────────────────────────
     def _send_raw(self, text: str) -> None:
-        """Пишет строку в stdin C#. Поднимает OSError/BrokenPipeError если процесс мёртв."""
         if self._proc.poll() is not None:
-            raise RuntimeError(f"C# процесс завершился с кодом {self._proc.poll()}")
-        self._proc.stdin.write(text + "\n")
-        self._proc.stdin.flush()
+            raise RuntimeError(
+                f"C# завершился с кодом {self._proc.poll()} до отправки '{text}'"
+            )
+        error: list = [None]
+
+        def _writer():
+            try:
+                self._proc.stdin.write(text + "\n")
+                self._proc.stdin.flush()
+            except Exception as e:
+                error[0] = e
+
+        t = threading.Thread(target=_writer, daemon=True)
+        t.start()
+        t.join(SEND_TIMEOUT)
+
+        if t.is_alive():
+            raise TimeoutError(f"C# не читает stdin за {SEND_TIMEOUT} сек")
+        if error[0] is not None:
+            raise error[0]
 
     def _recv_json(self) -> dict:
-        """
-        Читает одну JSON-строку из stdout C# с таймаутом RECV_TIMEOUT.
-        Запускает readline() в daemon-потоке, чтобы не блокировать навсегда.
-        """
         result: list = [None]
         error:  list = [None]
 
@@ -212,28 +345,45 @@ class GameInterface:
         t.join(RECV_TIMEOUT)
 
         if t.is_alive():
-            raise TimeoutError(
-                f"C# не ответил за {RECV_TIMEOUT} сек — процесс завис"
-            )
+            raise TimeoutError(f"C# не ответил за {RECV_TIMEOUT} сек")
         if error[0] is not None:
             raise error[0]
 
         line = result[0]
         if not line:
-            raise EOFError("C# закрыл stdout (EOF)")
+            raise EOFError("C# закрыл stdout (EOF) — процесс упал")
 
         return json.loads(line)
 
-    # ── Закрытие ──────────────────────────────────────────────────────────────
+    # ── Закрытие ──────────────────────────────────────────────────────────
     def close(self) -> None:
-        try:
-            self._proc.terminate()
-            self._proc.wait(timeout=5)
-        except Exception:
-            pass
+        self._kill_tree()
 
     def __del__(self):
         try:
             self.close()
         except Exception:
             pass
+
+
+# ── Вспомогательная функция: avg-pool 2D массива до заданного размера ─────
+def _avg_pool_2d(arr: np.ndarray, out_h: int, out_w: int) -> np.ndarray:
+    """
+    Уменьшает 2D-массив до (out_h, out_w) усреднением прямоугольных блоков.
+    Работает для любого входного размера (не обязательно кратного out_h/out_w).
+
+    Пример: (16,16) → (8,8): каждый блок 2×2 усредняется в 1 пиксель.
+             (20,20) → (8,8): блоки 2.5×2.5 (дробные, границы сглаживаются).
+    """
+    h, w = arr.shape
+    result = np.zeros((out_h, out_w), dtype=np.float32)
+    for i in range(out_h):
+        y0 = int(i * h / out_h)
+        y1 = int((i + 1) * h / out_h)
+        y1 = max(y1, y0 + 1)   # минимум 1 строка
+        for j in range(out_w):
+            x0 = int(j * w / out_w)
+            x1 = int((j + 1) * w / out_w)
+            x1 = max(x1, x0 + 1)
+            result[i, j] = arr[y0:y1, x0:x1].mean()
+    return result

@@ -13,8 +13,8 @@
 /// </summary>
 public abstract class Enemy : Entity
 {
-    public int HP    = 3;
-    public int MaxHP = 3;
+    public int HP    = 1;
+    public int MaxHP = 1;
 
     /// <summary>
     /// Оставшиеся шаги до следующей атаки.
@@ -22,6 +22,16 @@ public abstract class Enemy : Entity
     /// Сбрасывается в AttackCooldownSteps после каждого удара.
     /// </summary>
     public int AttackCooldown = 0;
+
+    /// <summary>
+    /// Накопленная энергия движения [0..∞).
+    /// Каждый шаг игры прибавляется Speed / Player.Speed.
+    /// Когда накопилось ≥ 1.0 — враг совершает ход (движение + атака),
+    /// из счётчика вычитается 1.0.
+    /// Это позволяет врагам с Speed &lt; Player.Speed двигаться реже,
+    /// и игрок может убежать от медленных противников.
+    /// </summary>
+    public float MoveEnergy = 0f;
 
     // ── Свойства, определяемые подклассом ────────────────────────────────────
     public abstract EnemyType Type            { get; }

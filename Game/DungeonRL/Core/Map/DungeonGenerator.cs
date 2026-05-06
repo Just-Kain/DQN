@@ -17,8 +17,10 @@ public class DungeonGenerator
 {
     // ── Настройки BSP ──────────────────────────────────────────────────────────
     private const int MinSplitSize = 4;   // минимальный размер секции для разбиения
-    private const int MaxDepth     = 4;   // максимальная глубина дерева
     private const int MinRoomSize  = 4;   // минимальный размер комнаты
+    // MaxDepth вычисляется динамически в Generate() из размера карты:
+    //   16×16 → 2,  20×20 → 2,  24×24 → 3,  32×32 → 4
+    private int _maxDepth;
 
     private Random rng = null!;
 
@@ -26,6 +28,9 @@ public class DungeonGenerator
     public DungeonMap Generate(int width, int height, int seed)
     {
         rng = new Random(seed);
+        // Глубина дерева BSP адаптируется к размеру карты:
+        // маленькая карта → меньше разбиений → больше/меньше комнат
+        _maxDepth = Math.Max(2, Math.Min(width, height) / 8);
 
         var map = new DungeonMap { Tiles = new TileType[width, height] };
 
@@ -81,7 +86,7 @@ public class DungeonGenerator
     // ── BSP: рекурсивное разбиение ─────────────────────────────────────────────
     private void Split(BspNode node, int depth)
     {
-        if (depth >= MaxDepth) return;
+        if (depth >= _maxDepth) return;
 
         bool canSplitH = node.H >= MinSplitSize * 2;
         bool canSplitV = node.W >= MinSplitSize * 2;
@@ -230,7 +235,7 @@ public class DungeonGenerator
     /// </summary>
     private void PlacePitsInRooms(DungeonMap map, List<BspNode> leaves, int exitX, int exitY)
     {
-        const int ExitClearRadius = 3;   // тайлы вокруг Exit — без ям
+        const int ExitClearRadius = 2;   // тайлы вокруг Exit — без ям
         const float WallPitChance   = 0.45f;
         const float CenterPitChance = 0.33f;
 
