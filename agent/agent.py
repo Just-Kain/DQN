@@ -65,7 +65,7 @@ agent.py — Три алгоритма обучения с подкреплен�
    LR          = 1e-4    α: Adam learning rate
    EPS_START   = 1.0     начальная ε (полное исследование)
    EPS_END     = 0.05    минимальная ε
-   EPS_DECAY   = 0.9985  медленное затухание (больше исследования вначале)
+   EPS_DECAY   = 0.9995  медленное затухание (~9200 эп. до EPS_END)
    BATCH_SIZE  = 256     (только DQN/DDQN)
    BUFFER_CAP  = 200_000 (только DQN/DDQN)
    TARGET_UPDATE= 500    (только DQN/DDQN)
@@ -85,7 +85,7 @@ GAMMA         = 0.95
 LR            = 1e-4
 EPS_START     = 1.0
 EPS_END       = 0.05
-EPS_DECAY     = 0.9985
+EPS_DECAY     = 0.9995   # ~9200 эпизодов до EPS_END (было 0.9985 → ~2000)
 
 # ── Гиперпараметры (DQN / DDQN) ──────────────────────────────────────────────
 BATCH_SIZE    = 256
@@ -148,6 +148,16 @@ class _BaseAgent:
     # ── Затухание ε ──────────────────────────────────────────────────────────
     def decay_epsilon(self) -> None:
         self.eps = max(EPS_END, self.eps * EPS_DECAY)
+
+    # ── Сброс буфера при смене фазы ──────────────────────────────────────────
+    def clear_buffer(self) -> None:
+        """
+        Очищает replay buffer при переходе на новую фазу.
+        Веса сети сохраняются — переносится знание о механике игры.
+        Переходы сбрасываются — старая карта не отравляет обучение на новой.
+        Базовый класс (Q-Learning, нет буфера): no-op.
+        """
+        pass   # Q-Learning без буфера — ничего не делать
 
     # ── Один gradient step (внутренний хелпер) ───────────────────────────────
     def _gradient_step(self, q_pred: torch.Tensor,
@@ -257,6 +267,15 @@ class DQNAgent(_BaseAgent):
     def _store_normalized(self, obs, action, reward, next_obs, done) -> None:
         self.buffer.push(obs, action, reward, next_obs, done)
 
+    def clear_buffer(self) -> None:
+        """Сбрасывает буфер при смене фазы (переходы с другой карты нерелевантны)."""
+        dropped = len(self.buffer.buffer)
+        self.buffer.buffer.clear()
+        self.buffer.pos = 0
+        self._reward_running_std = 1.0   # сбрасываем нормализацию наград вместе с буфером
+        print("[agent] Replay buffer cleared ({:,} transitions dropped). "
+              "reward_std reset.".format(dropped))
+
     def train_step(self) -> float | None:
         if not self.buffer.ready:
             return None
@@ -360,6 +379,5 @@ def make_agent(algo: str, device: str = "cpu") -> _BaseAgent:
         return DDQNAgent(device)
     else:
         raise ValueError(
-            f"Неизвестный алгоритм: '{algo}'. "
-            f"Доступные: {ALGO_CHOICES}"
+            "Unknown algo: '{}'. Choices: {}".format(algo, ALGO_CHOICES)
         )

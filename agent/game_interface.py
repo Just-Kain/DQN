@@ -48,11 +48,11 @@ PROJECT_PATH = os.path.normpath(os.path.join(_SCRIPT_DIR, "..", "Game", "Dungeon
 PROJECT_DIR  = os.path.dirname(PROJECT_PATH)
 
 # ── Параметры наблюдения ───────────────────────────────────────────────────
-VIEW      = 17          # 17×17 локальный вид (8.5 тайлов в каждую сторону)
-HALF      = VIEW // 2   # = 8
+VIEW      = 33          # 33×33 локальный вид (16 тайлов в каждую сторону)
+HALF      = VIEW // 2   # = 16
 MINI_SIZE = 8           # размер глобальной мини-карты (8×8)
 
-# OBS_SIZE = 17×17 + 8×8 + 4 = 289 + 64 + 4 = 357
+# OBS_SIZE = 33×33 + 8×8 + 4 = 1089 + 64 + 4 = 1157
 # (должен совпадать с model.py OBS_SIZE)
 OBS_SIZE = VIEW * VIEW + MINI_SIZE * MINI_SIZE + 4
 
@@ -60,18 +60,17 @@ OBS_SIZE = VIEW * VIEW + MINI_SIZE * MINI_SIZE + 4
 TILE_EMPTY    = 0
 TILE_WALL     = 1
 TILE_FLOOR    = 2
-TILE_EXIT     = 3
+ENTITY_PLAYER = 3   # низкий приоритет — мы и так знаем где игрок
 TILE_PIT      = 4
 ENEMY_WALK    = 5
 ENEMY_FLY     = 6
 ENEMY_CRAWL   = 7
-ENTITY_PLAYER = 8
-ENTITY_MAX    = 8   # делитель нормализации
+TILE_EXIT     = 8   # вершина иерархии — доминирует в max-pool мини-карты
+ENTITY_MAX    = 8   # делитель нормализации (exit/8 = 1.0)
 
-MAX_STEPS      = 1000
+MAX_STEPS      = 500
 MAX_HP         = 10
 _CS_SEED_START = 75
-SEED_STEP      = 0
 
 # ── Таймауты и лимиты ──────────────────────────────────────────────────────
 SEND_TIMEOUT  = 10.0
@@ -83,14 +82,16 @@ CRASH_REWARD  = -5.0
 
 class GameInterface:
     def __init__(self, seed_start: int = 0, visual_mode: bool = False,
-                 map_size: int = 16):
+                 map_size: int = 16, no_enemies: bool = False, player_hp: int = 10):
         """
-        map_size — размер карты (передаётся C# через --map-size:N).
-        Курикулум меняет его по мере роста win_rate:
-          Фаза 1: 16   Фаза 2: 20   Фаза 3: 24   Фаза 4: 32
+        map_size   — размер карты (передаётся C# через --map-size:N).
+        no_enemies — если True, враги не спавнятся (Фаза 0: чистая навигация).
+        player_hp  — HP игрока при старте эпизода (передаётся через --player-hp:N).
         """
         self._visual_mode  = visual_mode
         self._map_size     = map_size
+        self._no_enemies   = no_enemies
+        self._player_hp    = player_hp
         self._restarts     = 0
         self._built        = False
         self._state: dict  = {}
@@ -127,8 +128,10 @@ class GameInterface:
         cmd  = ["dotnet", "run", "--project", PROJECT_PATH]
         if self._built:
             cmd.append("--no-build")
-        # Передаём флаг режима и размер карты для курикулума
-        cmd += ["--", flag, f"--map-size:{self._map_size}"]
+        # Передаём флаг режима, размер карты, HP игрока и опционально --no-enemies
+        cmd += ["--", flag, f"--map-size:{self._map_size}", f"--player-hp:{self._player_hp}"]
+        if self._no_enemies:
+            cmd.append("--no-enemies")
 
         kwargs: dict = dict(
             stdin=subprocess.PIPE,
@@ -207,7 +210,9 @@ class GameInterface:
         for attempt in range(3):
             try:
                 self._episode_seed = self._cs_seed
-                self._send_raw("reset")
+                # Явно передаём сид в C# — иначе C# генерирует случайный сид
+                self._send_raw(f"reset {self._cs_seed}")
+                self._cs_seed += 1          # следующий эпизод = следующий сид
                 self._state = self._recv_json()
                 self._restarts = 0
                 return self._make_obs(self._state)
@@ -245,8 +250,6 @@ class GameInterface:
             obs    = self._make_obs(self._state)
             reward = float(self._state.get("reward", 0.0))
             done   = bool(self._state.get("done", True))
-            if done and reward > 0:
-                self._cs_seed += SEED_STEP
             return obs, reward, done
         except Exception as exc:
             print(f"\n[GameInterface] step сбой: {exc}", flush=True)
@@ -262,13 +265,13 @@ class GameInterface:
         """
         Строит вектор наблюдения из entity-матрицы C#.
 
-        Итоговый вектор (357 признаков):
-          [0..288]   — 17×17 local view (нормализован / ENTITY_MAX)
-          [289..352] — 8×8 мини-карта (avg-pooling, нормализован / ENTITY_MAX)
-          [353]      — (exit_x − px) / map_w
-          [354]      — (exit_y − py) / map_h
-          [355]      — player_hp / MAX_HP
-          [356]      — step / MAX_STEPS
+        Итоговый вектор (1157 признаков):
+          [0..1088]    — 33×33 local view (нормализован / ENTITY_MAX)
+          [1089..1152] — 8×8 мини-карта (max-pooling, нормализован / ENTITY_MAX)
+          [1153]       — (exit_x − px) / map_w
+          [1154]       — (exit_y − py) / map_h
+          [1155]       — player_hp / MAX_HP
+          [1156]       — step / MAX_STEPS
         """
         px, py = s["player_x"], s["player_y"]
         map2d  = s["map"]             # list[list[int]] — [H][W]
@@ -288,15 +291,18 @@ class GameInterface:
                 view[idx] = val / ENTITY_MAX
                 idx += 1
 
-        # ── 8×8 глобальная мини-карта (avg-pooling) ─────────────────────────
-        # Вся карта → нормализованный массив (H×W) → avg-pool до (8×8)
+        # ── 8×8 глобальная мини-карта (max-pooling) ─────────────────────────
+        # Вся карта → нормализованный массив (H×W) → max-pool до (8×8)
+        # max-pooling гарантирует: выход (3), враги (5-7) видны в любой ячейке,
+        # даже если занимают 1 тайл из 16. avg-pooling размывает их до шума.
         full_map = np.array(map2d, dtype=np.float32) / ENTITY_MAX  # (H, W)
-        mini_map = _avg_pool_2d(full_map, MINI_SIZE, MINI_SIZE)     # (8, 8)
+        mini_map = _max_pool_2d(full_map, MINI_SIZE, MINI_SIZE)     # (8, 8)
         mini_flat = mini_map.flatten()                               # (64,)
 
         # ── Скалярные признаки ───────────────────────────────────────────────
         ex, ey    = s["exit_x"], s["exit_y"]
-        hp_norm   = s["player_hp"] / MAX_HP
+        max_hp    = s.get("max_hp", MAX_HP)          # реальный MaxHP из стейта
+        hp_norm   = s["player_hp"] / max_hp if max_hp > 0 else 0.0
         step_norm = s.get("step", 0) / MAX_STEPS
 
         return np.concatenate([
@@ -366,24 +372,29 @@ class GameInterface:
             pass
 
 
-# ── Вспомогательная функция: avg-pool 2D массива до заданного размера ─────
-def _avg_pool_2d(arr: np.ndarray, out_h: int, out_w: int) -> np.ndarray:
+# ── Вспомогательная функция: max-pool 2D массива до заданного размера ──────
+def _max_pool_2d(arr: np.ndarray, out_h: int, out_w: int) -> np.ndarray:
     """
-    Уменьшает 2D-массив до (out_h, out_w) усреднением прямоугольных блоков.
+    Уменьшает 2D-массив до (out_h, out_w) взятием максимума по блоку.
     Работает для любого входного размера (не обязательно кратного out_h/out_w).
 
-    Пример: (16,16) → (8,8): каждый блок 2×2 усредняется в 1 пиксель.
-             (20,20) → (8,8): блоки 2.5×2.5 (дробные, границы сглаживаются).
+    В отличие от avg-pooling, max-pooling сохраняет сигнал редких объектов:
+      - Выход (TILE_EXIT=3): 3/8=0.375  (vs floor 2/8=0.250) — чётко виден
+      - Враги (5-7/8=0.625-0.875)       — доминируют в ячейке
+      - Стены (1/8=0.125) не маскируют floor/exit даже в угловых блоках
+
+    Пример 16x16 -> 8x8: блок 2x2, max из 4 тайлов.
+             32x32 -> 8x8: блок 4x4, max из 16 тайлов — сигнал не теряется.
     """
     h, w = arr.shape
     result = np.zeros((out_h, out_w), dtype=np.float32)
     for i in range(out_h):
         y0 = int(i * h / out_h)
         y1 = int((i + 1) * h / out_h)
-        y1 = max(y1, y0 + 1)   # минимум 1 строка
+        y1 = max(y1, y0 + 1)
         for j in range(out_w):
             x0 = int(j * w / out_w)
             x1 = int((j + 1) * w / out_w)
             x1 = max(x1, x0 + 1)
-            result[i, j] = arr[y0:y1, x0:x1].mean()
+            result[i, j] = arr[y0:y1, x0:x1].max()
     return result

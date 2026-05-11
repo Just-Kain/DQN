@@ -11,7 +11,7 @@ public class DungeonEnv
     private readonly RewardSystem     rewards   = new();
     private readonly DungeonGenerator generator = new();
 
-    public const int MaxSteps = 500;
+    public const int MaxSteps = 500;   // синхронизировано с game_interface.py MAX_STEPS
 
     /// <summary>
     /// Размер карты (квадратная). Используется курикулум-обучением:
@@ -19,6 +19,20 @@ public class DungeonEnv
     /// Меняется через AiProtocol (аргумент --map-size:N).
     /// </summary>
     public int MapSize { get; set; } = 16;
+
+    /// <summary>
+    /// Если true — враги не спавнятся (Фаза 0 курикулума: агент учится навигации).
+    /// Включается аргументом --no-enemies.
+    /// </summary>
+    public bool NoEnemies { get; set; } = false;
+
+    /// <summary>
+    /// HP игрока при старте эпизода. Растёт с фазой курикулума:
+    ///   Phase 0: 15   Phase 1: 15   Phase 2: 20
+    ///   Phase 3: 25   Phase 4: 30   Phase 5: 50
+    /// Меняется через AiProtocol (аргумент --player-hp:N).
+    /// </summary>
+    public int PlayerHp { get; set; } = 10;
 
     public GameState State { get; private set; } = null!;
 
@@ -36,10 +50,10 @@ public class DungeonEnv
             {
                 X = spawnX, Y = spawnY,
                 Xf = spawnX, Yf = spawnY,
-                HP = 10, MaxHP = 10,
+                HP = PlayerHp, MaxHP = PlayerHp,
                 Facing = Direction.Down
             },
-            Enemies    = SpawnEnemies(map, spawnX, spawnY, seed),
+            Enemies    = NoEnemies ? new List<Enemy>() : SpawnEnemies(map, spawnX, spawnY, seed),
             StepCount  = 0,
             IsTerminal = false
         };
