@@ -1,259 +1,315 @@
 # DQN Agent — DungeonRL
 
-Агент обучается проходить процедурно-генерируемые подземелья методом **Deep Q-Network (DQN)**.  
-Управляет персонажем через JSON-протокол с C#-движком игры.
+The agent learns to navigate procedurally-generated dungeons using Deep Q-Networks.
+It controls the player character through a JSON protocol with the C# game engine.
 
 ---
 
-## Алгоритм: Deep Q-Network (DQN)
+## Algorithms
 
-### Q-функция
+Three algorithms are available via `--algo`. All share the same network architecture
+and observation format; they differ in how targets are computed and whether a replay
+buffer / target network are used.
 
-Q*(s, a) — ожидаемая суммарная дисконтированная награда если в состоянии `s` выбрать действие `a` и дальше действовать оптимально:
+### Q-Learning (`--algo qlearn`)
 
-```
-Q*(s, a) = E[ Σ_{k=0}^{∞} γ^k · r_{t+k+1} | s_t=s, a_t=a ]
-```
-
-γ = 0.99 (GAMMA) — коэффициент дисконтирования. Близость к 1 означает,
-что агент «смотрит далеко» в будущее.
-
-### Уравнение Беллмана
-
-Оптимальная Q-функция удовлетворяет:
+Neural Q-Learning: no replay buffer, no target network.
+The network is updated after every single step using the Bellman target:
 
 ```
-Q*(s, a) = E[ r + γ · max_{a'} Q*(s', a') ]
+target = r  +  gamma * max_a Q(s', a)        (if not done)
+target = r                                    (if done)
 ```
 
-Это рекуррентное уравнение позволяет итеративно уточнять Q по переходам (s, a, r, s').
+Both the online prediction and the target are computed by the **same** network,
+so weights shift every step. Most unstable variant — prone to divergence on complex maps.
 
-### TD-цель (Temporal Difference target)
+### Vanilla DQN (`--algo dqn`)
 
-На каждом шаге обучения вычисляем «целевое» значение:
+Adds two stabilising components:
 
+- **Replay buffer** (50 000 transitions): samples random mini-batches, breaking
+  temporal correlation between consecutive observations.
+- **Target network**: a frozen copy of the online network, synced every
+  `TARGET_UPDATE` steps. Targets are stable during training.
+
+Target computation (max Q):
 ```
-y_t = r_t + γ · max_{a'} Q_target(s_{t+1}, a') · (1 − done_t)
-```
-
-- `Q_target` — **замороженная** копия сети, обновляется каждые 100 шагов.  
-- При `done_t = 1` (конец эпизода): `y_t = r_t` (нет будущего).
-
-Разделение на `Q_online` (обучаемая) и `Q_target` (замороженная) стабилизирует обучение — цель не «убегает» вместе с весами.
-
-### Функция потерь — Huber Loss (SmoothL1)
-
-```
-        ⎧ ½ · δ²        если |δ| ≤ 1
-L(θ) = ⎨
-        ⎩ |δ| − ½       если |δ| > 1
-
-где δ = Q_online(s_t, a_t; θ) − y_t
+target = r  +  gamma * max_a Q_target(s', a)
 ```
 
-Huber Loss менее чувствительна к выбросам в наградах (например, +1000 за победу),
-чем MSE: при больших ошибках градиент ограничен константой, а не растёт линейно.
+### Double DQN (`--algo ddqn`) — default
 
-### Обновление весов
-
-```
-θ ← θ − α · ∇_θ L(θ)        (Adam, α = 1e-4)
-||∇_θ|| ≤ 10.0               (gradient clipping)
-```
-
-### ε-жадная политика
+Extends DQN to reduce Q-value overestimation. The online network **selects** the
+best action; the target network **evaluates** it:
 
 ```
-        ⎧ argmax_a Q_online(s, a; θ)   с вероятностью (1 − ε)
-a_t =  ⎨
-        ⎩ random action                с вероятностью ε
+a* = argmax_a  Q_online(s', a)
+target = r  +  gamma * Q_target(s', a*)
 ```
 
-Затухание после каждого эпизода:
-
-```
-ε_{k+1} = max(ε_min, ε_k · d)
-
-d = 0.9925,  ε_min = 0.05
-
-Эпизод   0:  ε = 1.00   (100% исследование)
-Эпизод 100:  ε ≈ 0.47
-Эпизод 200:  ε ≈ 0.22
-Эпизод 370:  ε ≈ 0.05   (5% исследование навсегда)
-```
-
-### Experience Replay (буфер воспроизведения)
-
-Переходы `(s, a, r, s', done)` хранятся в циклическом буфере ёмкостью D = 50 000.
-На каждом шаге обучения сэмплируется случайный мини-батч B = 64.
-
-**Зачем**: случайный сэмплинг разрывает временны́е корреляции —
-иначе SGD «забывал» бы старые переходы и обучение расходилось бы.
+Decoupling selection from evaluation prevents the positive bias that accumulates
+when the same network both picks and scores actions.
 
 ---
 
-## Архитектура нейросети (model.py)
+## Observation Space  (OBS_SIZE = 1157)
+
+Each observation is a flat float32 vector of 1157 elements:
 
 ```
-Вход x ∈ R^85
-       │
-   Linear(85 → 256)  +  ReLU       h₁ = ReLU(W₁·x + b₁)
-       │
-   Linear(256 → 128) +  ReLU       h₂ = ReLU(W₂·h₁ + b₂)
-       │
-   Linear(128 → 8)                 Q  = W₃·h₂ + b₃
-       │
- Q ∈ R^8  — Q-значение для каждого из 8 действий
+[ local_view (1089)  |  minimap (64)  |  scalars (4) ]
 ```
 
-Параметров всего: ~50 тыс. — намеренно небольшая сеть, подходящая для CPU.
+### Local view — 33 × 33 = 1089 values
+
+A 33×33 tile window centred on the player (16 tiles in every direction).
+Tiles outside the map boundaries are padded with 0 (EMPTY).
+Each cell stores the **entity code** normalised to [0, 1] by dividing by ENTITY_MAX (8):
+
+| Code | Entity / Tile   |
+|------|-----------------|
+| 0    | Empty / out-of-bounds |
+| 1    | Wall            |
+| 2    | Floor           |
+| 3    | Player          |
+| 4    | Pit             |
+| 5    | Walking Enemy   |
+| 6    | Flying Enemy    |
+| 7    | Crawling Enemy  |
+| 8    | Exit (dominates in max-pool) |
+
+Hierarchy is intentional: Exit (8) > any enemy (5-7) > Pit (4) > Player (3) > Floor (2) > Wall (1).
+
+VIEW = 33 covers full maps up to 24×24 without clipping.
+For 32×32 maps the player can reach the centre; peripheral tiles at the edge of
+the 33-window show part of the map — sufficient for navigation.
+
+### Minimap — 8 × 8 = 64 values
+
+Max-pooling of the full map down to 8×8 cells.
+**Max-pooling** is used (not average) so Exit (value 8, normalised 1.0) always
+dominates in its cell regardless of how many wall or floor tiles surround it.
+This guarantees the exit is always visible on the minimap.
+
+### Scalars — 4 values
+
+| Index | Value                        | Range  |
+|-------|------------------------------|--------|
+| 0     | Player HP / MaxHP            | [0, 1] |
+| 1     | Steps taken / MAX_STEPS      | [0, 1] |
+| 2     | (exit_x - player_x) / map_w  | [-1, 1]|
+| 3     | (exit_y - player_y) / map_h  | [-1, 1]|
 
 ---
 
-## Пространство наблюдений (85 признаков)
+## Action Space  (NUM_ACTIONS = 7)
 
-| Индексы | Описание | Нормировка |
-|---------|----------|------------|
-| 0 – 80 | Локальный вид 9×9 вокруг игрока: тип тайла/существа | `val / 7.0` |
-| 81 | `(exit_x − player_x) / 32` — направление до выхода (X) | [-1, 1] |
-| 82 | `(exit_y − player_y) / 32` — направление до выхода (Y) | [-1, 1] |
-| 83 | `player_hp / MaxHP` — здоровье | [0, 1] |
-| 84 | `step / 500` — прогресс эпизода | [0, 1] |
+| Index | Action      | Description                      |
+|-------|-------------|----------------------------------|
+| 0     | MoveUp      | Move one tile north              |
+| 1     | MoveDown    | Move one tile south              |
+| 2     | MoveLeft    | Move one tile west               |
+| 3     | MoveRight   | Move one tile east               |
+| 4     | MeleeAttack | Attack adjacent enemy            |
+| 5     | ArrowShot   | Ranged attack (straight line)    |
+| 6     | Idle        | Do nothing (−2.0 reward penalty) |
 
-Кодировка тайлов (делится на 7.0):
-
-| Код | Объект |
-|-----|--------|
-| 0 | Стена / граница |
-| 1 | Пол |
-| 2 | Выход |
-| 3 | Яма |
-| 4 | Враг-ходок |
-| 5 | Враг-летун |
-| 6 | Враг-ползун |
-| 7 | Игрок |
+Idle is included but strongly discouraged by a large penalty.
 
 ---
 
-## Пространство действий (8 действий)
+## Reward System
 
-| ID | Действие | Описание |
-|----|----------|----------|
-| 0 | Up | Шаг вверх |
-| 1 | Down | Шаг вниз |
-| 2 | Left | Шаг влево |
-| 3 | Right | Шаг вправо |
-| 4 | MeleeAttack | Удар в направлении взгляда |
-| 5 | ArrowShot | Выстрел стрелой |
-| 6 | Dash | Рывок (через яму без урона) |
-| 7 | Idle | Простой |
+| Event                           | Reward                            |
+|---------------------------------|-----------------------------------|
+| Each step (time penalty)        | −0.05                             |
+| Kill enemy                      | +3.0 per kill                     |
+| Attack with no kill             | −0.3                              |
+| Idle action                     | −2.0                              |
+| Player takes damage             | −10.0 × (hpLost / MaxHP)          |
+| Player death                    | −25.0                             |
+| BFS shaping (potential-based)   | ±0.5 × Δdist_to_exit              |
+| Reach exit (win)                | +100.0                            |
+
+**HP damage** is percentage-based: losing 10% of MaxHP always costs −1.0,
+regardless of phase. This keeps the avoidance signal consistent as MaxHP
+scales from 15 (Phase 0) to 50 (Phase 5).
+
+**BFS shaping** is a potential-based reward: `0.5 × (prev_dist − curr_dist)`.
+Moving one tile closer to the exit yields +0.5; moving away yields −0.5.
+Circular wandering nets zero — reward farming is impossible.
 
 ---
 
-## Система наград (RewardSystem.cs)
-
-| Событие | Награда |
-|---------|---------|
-| Каждый шаг (штраф за время) | −1 |
-| Новая клетка (исследование) | +2.5 |
-| Убийство врага | +7.5 |
-| Атака без результата | −2.5 |
-| Простой (Idle) | −10 |
-| Урон по игроку (за 1 HP) | −5 |
-| Смерть игрока | −20 |
-| **Приближение к выходу (BFS)** | **+10** |
-| Достижение выхода (победа) | +1000 |
-
-### Награда за приближение к выходу — BFS
-
-На каждом шаге вычисляется кратчайший путь от игрока до выхода по проходимым тайлам (BFS по 4-связному графу):
+## Network Architecture
 
 ```
-d_t = BFS(player_pos_t, exit_pos)
-
-Если d_t < d_{t−1}:  reward += 10
+Input:  1157  (flat float32 observation)
+        |
+   Linear(1157 → 512)
+        |
+      ReLU
+        |
+   Linear(512 → 256)
+        |
+      ReLU
+        |
+   Linear(256 → 7)
+        |
+Output:  7 Q-values (one per action)
 ```
 
-BFS (обход в ширину) гарантирует нахождение **кратчайшего** пути за O(W×H).
-Это важно для лабиринтов: Манхэттенское расстояние может быть 3,
-но реальный путь — 25 (из-за стен).
+**Hyperparameters:**
 
-Инициализация: `d_{-1} = ∞` (до первого шага путь неизвестен).
-Если выход недостижим (возвращается `int.MaxValue`): награда не начисляется.
+| Parameter       | Value    |
+|-----------------|----------|
+| GAMMA           | 0.99     |
+| LR              | 1e-4     |
+| BATCH_SIZE      | 64       |
+| BUFFER_SIZE     | 50 000   |
+| TARGET_UPDATE   | 500 steps|
+| EPS_START       | 1.0      |
+| EPS_END         | 0.01     |
+| EPS_DECAY       | 0.9995   |
 
 ---
 
-## Гиперпараметры
+## Curriculum Learning
 
-| Параметр | Значение | Описание |
-|----------|----------|----------|
-| GAMMA | 0.99 | Коэффициент дисконтирования |
-| LR | 1e-4 | Скорость обучения (Adam) |
-| BATCH_SIZE | 64 | Размер мини-батча |
-| EPS_START | 1.0 | Начальная ε |
-| EPS_END | 0.05 | Минимальная ε |
-| EPS_DECAY | 0.9925 | Множитель затухания ε |
-| TARGET_UPDATE | 100 | Шагов между обновлениями target |
-| BUFFER_CAP | 50 000 | Ёмкость ReplayBuffer |
-| MAX_STEPS | 500 | Максимум шагов в эпизоде |
+The agent trains through 6 phases of increasing difficulty.
+Phase advance requires: win_rate >= threshold over the last 200 episodes
+AND at least 500 episodes completed in the current phase.
 
----
+| Phase | Map     | Enemies | HP | Win threshold |
+|-------|---------|---------|-----|---------------|
+| 0     | 16×16   | No      | 15  | 50%           |
+| 1     | 16×16   | Yes     | 15  | 35%           |
+| 2     | 18×18   | Yes     | 20  | 30%           |
+| 3     | 20×20   | Yes     | 25  | 50%           |
+| 4     | 24×24   | Yes     | 30  | 65%           |
+| 5     | 32×32   | Yes     | 50  | (final phase) |
 
-## Файловая структура
+**Phase 0** is navigation-only: no enemies, small map.
+The agent learns to find the exit before combat is introduced.
 
-```
-agent/
-├── train.py          — основной обучающий цикл
-├── emulate.py        — визуальная эмуляция (SFML + matplotlib)
-│     --replay        — воспроизведение лучшего записанного эпизода
-├── visualize.py      — статическая визуализация весов и истории
-├── agent.py          — DQNAgent (этот файл с документацией)
-├── model.py          — архитектура нейросети DQN
-├── replay_buffer.py  — циклический буфер Experience Replay
-├── game_interface.py — протокол Python↔C# (subprocess, JSON)
-└── checkpoints/
-    ├── best.pt           — лучшая модель по суммарной награде
-    ├── last.pt           — последний сохранённый чекпоинт
-    ├── best_episode.pkl  — запись действий лучшего эпизода (seed + actions)
-    └── train_log.csv     — лог обучения: episode, reward, steps, ε, loss
-```
+**Phase 2 (18×18)** is an intermediate step added after analysis showed
+direct 16×16 → 20×20 transitions resulted in ~4% win_rate (vs 15%+ with 18×18).
+
+**On phase transition:**
+- Replay buffer is cleared (removes stale transitions from the smaller map).
+- Epsilon is reset: `eps = max(0.30, eps × 2.0)` — forces re-exploration
+  of the new, larger map layout.
 
 ---
 
-## Запуск
+## Stagnation Detection
+
+Every 300 episodes the agent checks for learning plateaus.
+It compares win_rate of the **last 100 episodes** vs the **preceding 100 episodes**.
+
+Conditions to trigger an epsilon bump:
+- Improvement delta < 1% (STAGNATION_THRESHOLD = 0.01)
+- Current eps < 0.15 (EPS_BUMP_MAX — no point bumping if already exploring)
+- Cooldown elapsed: at least 600 episodes since last bump (STAGNATION_COOLDOWN)
+
+On trigger: `eps = min(0.50, eps × 2.0)`
+
+This forces re-exploration without fully resetting training progress.
+
+---
+
+## Checkpoints
+
+Files are algo-specific (replace `{algo}` with `qlearn`, `dqn`, or `ddqn`):
+
+| File                              | Contents                              |
+|-----------------------------------|---------------------------------------|
+| `checkpoints/best_{algo}.pt`      | Model weights at best episode reward  |
+| `checkpoints/last_{algo}.pt`      | Latest checkpoint (every 100 episodes)|
+| `checkpoints/best_episode_{algo}.pkl` | Seed + action sequence for best run|
+| `checkpoints/train_log_{algo}.csv`| Per-episode training log              |
+
+Training log columns: `episode, total_reward, steps, epsilon, loss_mean, win_rate, phase, map_size, no_enemies, ep_seed`
+
+---
+
+## Usage
 
 ```bash
 cd agent
+pip install -r requirements.txt
 
-# Обучение (2000 эпизодов)
+# Double DQN (default, recommended)
 python train.py
 
-# Продолжить с чекпоинта
-python train.py --resume
+# Resume from last checkpoint
+python train.py --algo ddqn --resume
 
-# Визуальная эмуляция (SFML + matplotlib)
-python emulate.py
+# Vanilla DQN
+python train.py --algo dqn
 
-# Воспроизвести лучший записанный эпизод
-python emulate.py --replay
+# Q-Learning (most unstable)
+python train.py --algo qlearn
 
-# Статическая визуализация весов
-python visualize.py
+# Fix one map for all episodes (reproducible training)
+python train.py --fixed-seed 75
+
+# Replay best episode visually
+python replay.py --algo ddqn
+
+# Watch agent play live (visual mode)
+python train.py --algo ddqn  # (use --ai-visual flag on the game binary)
 ```
 
 ---
 
-## Протокол Python ↔ C#
+## Algorithm Comparison
 
+| Property               | Q-Learning       | DQN              | DDQN             |
+|------------------------|------------------|------------------|------------------|
+| Replay buffer          | No               | Yes              | Yes              |
+| Target network         | No               | Yes              | Yes              |
+| Q-value overestimation | High             | Medium           | Low              |
+| Stability              | Low              | Medium           | High             |
+| Sample efficiency      | Low              | Medium           | Medium           |
+| Best for               | Debugging only   | Baseline         | Production       |
+
+**Q-Learning** diverges quickly on complex maps because every step shifts the
+network, which immediately changes targets for all other states.
+
+**DQN** stabilises training significantly. The replay buffer decorrelates
+experience; the target network provides stable TD targets. However, using
+`max Q_target` to both select and evaluate actions introduces an upward bias.
+
+**DDQN** keeps all DQN components but separates action selection (online net)
+from action evaluation (target net). This eliminates the overestimation bias,
+leading to more accurate Q-values and better policies on longer-horizon tasks
+like dungeon navigation.
+
+---
+
+## Protocol (game_interface.py ↔ C# engine)
+
+The Python agent communicates with the game via stdin/stdout:
+
+**Python → C#:**
 ```
-Python  →  C#  :  "reset"          — начать новый эпизод (C# управляет сидом)
-Python  →  C#  :  "reset <N>"      — начать эпизод с конкретным сидом N
-Python  →  C#  :  "0"…"7"          — выполнить действие (ActionType)
-C#      →  Python :  JSON-строка   — состояние мира после действия
+reset          # start new episode (C# picks seed)
+reset <N>      # start episode with seed N
+0 .. 6         # execute action (ActionType index)
 ```
 
-JSON-ответ C# содержит: `player_x/y`, `player_hp`, `enemies[]`, `exit_x/y`,
-`map[]` (плоский массив 32×32), `reward`, `done`, `step`.
+**C# → Python** (JSON per step):
+```json
+{
+  "player_x": 5,  "player_y": 8,
+  "player_hp": 12, "max_hp": 15,
+  "exit_x": 13,   "exit_y": 2,
+  "map": [[...]], 
+  "reward": 0.45, "done": false, "step": 42
+}
+```
 
-Таймауты: SEND = 10с, RECV = 30с. При зависании процесс убивается
-через `taskkill /F /T` (Windows) / SIGKILL по pgid (Linux).
+`max_hp` is used for HP normalisation in the observation scalars and
+for the percentage-based damage reward.
