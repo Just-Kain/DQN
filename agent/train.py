@@ -24,11 +24,12 @@ Checkpoint files (algo-specific):
 
 Curriculum (auto-advance on win_rate, min MIN_PHASE_EPISODES per phase):
     Phase 0 (16x16, NO enemies, 15hp): win_rate >= 50% -> agent learns navigation
-    Phase 1 (16x16, enemies,    15hp): win_rate >= 35% -> add combat
-    Phase 2 (18x18, enemies,    20hp): win_rate >= 30% -> intermediate step
-    Phase 3 (20x20, enemies,    25hp): win_rate >= 50%
-    Phase 4 (24x24, enemies,    30hp): win_rate >= 65%
-    Phase 5 (32x32, enemies,    50hp): final difficulty
+    Phase 1 (16x16, enemies,    15hp): win_rate >= 45% -> add combat
+    Phase 2 (18x18, enemies,    20hp): win_rate >= 40% -> intermediate step
+    Phase 3 (20x20, enemies,    25hp): win_rate >= 35%
+    Phase 4 (24x24, enemies,    30hp): win_rate >= 30%
+    Phase 5 (32x32, enemies,    50hp): win_rate >= 25%
+    Phase 6 (64x64, enemies,    75hp): final difficulty (infinite training)
 
 Epsilon reset on phase transition:
     eps = max(EPS_RESET_MIN, eps * EPS_RESET_FACTOR)
@@ -37,9 +38,9 @@ Epsilon reset on phase transition:
 Stagnation detection (win_rate-based):
     Every STAGNATION_CHECK (300) episodes we compare win_rate of the last
     STAGNATION_HALF episodes vs the preceding STAGNATION_HALF episodes.
-    If improvement < STAGNATION_THRESHOLD and eps < EPS_BUMP_MAX,
-    epsilon is bumped up by EPS_BUMP_FACTOR (x2.0) to escape local optima.
-    A cooldown (STAGNATION_COOLDOWN=600) prevents repeated bumps too fast.
+    Triggers when delta < STAGNATION_THRESHOLD (-2%) — i.e. win_rate is
+    actively dropping. Epsilon bumped x2.0, capped at EPS_BUMP_CEIL (0.75).
+    A cooldown (STAGNATION_COOLDOWN=1800) prevents repeated bumps too fast.
 """
 
 import argparse
@@ -55,12 +56,13 @@ from game_interface import GameInterface
 
 # ── Curriculum ────────────────────────────────────────────────────────────────
 CURRICULUM = [
-    {"map_size": 16, "no_enemies": True,  "player_hp": 15, "win_threshold": 0.50, "name": "Phase 0 (16x16, no enemies)"},
-    {"map_size": 16, "no_enemies": False, "player_hp": 15, "win_threshold": 0.35, "name": "Phase 1 (16x16, enemies)"},
-    {"map_size": 18, "no_enemies": False, "player_hp": 20, "win_threshold": 0.30, "name": "Phase 2 (18x18, enemies)"},
-    {"map_size": 20, "no_enemies": False, "player_hp": 25, "win_threshold": 0.50, "name": "Phase 3 (20x20)"},
-    {"map_size": 24, "no_enemies": False, "player_hp": 30, "win_threshold": 0.65, "name": "Phase 4 (24x24)"},
-    {"map_size": 32, "no_enemies": False, "player_hp": 50, "win_threshold": 999.0,"name": "Phase 5 (32x32)"},
+    #{"map_size": 16, "no_enemies": True,  "player_hp": 15, "win_threshold": 0.50, "name": "Phase 0 (16x16, no enemies)"},
+    {"map_size": 16, "no_enemies": False, "player_hp": 15, "win_threshold": 0.50, "name": "Phase 1 (16x16, enemies)"},
+    {"map_size": 18, "no_enemies": False, "player_hp": 20, "win_threshold": 0.45, "name": "Phase 2 (18x18, enemies)"},
+    {"map_size": 20, "no_enemies": False, "player_hp": 25, "win_threshold": 0.40, "name": "Phase 3 (20x20)"},
+    {"map_size": 24, "no_enemies": False, "player_hp": 30, "win_threshold": 0.35, "name": "Phase 4 (24x24)"},
+    {"map_size": 32, "no_enemies": False, "player_hp": 50, "win_threshold": 999.0, "name": "Phase 5 (32x32)"},
+   #{"map_size": 64, "no_enemies": False, "player_hp": 75, "win_threshold": 999.0,"name": "Phase 6 (64x64)"},
 ]
 WIN_WINDOW         = 200   # sliding window for win_rate
 MIN_PHASE_EPISODES = 500   # minimum episodes per phase before advancing
@@ -73,12 +75,12 @@ EPS_RESET_MIN      = 0.30  # eps floor after reset (never below 30%)
 # Triggers only when eps < EPS_BUMP_MAX (no point bumping if already exploring).
 # STAGNATION_COOLDOWN prevents repeated bumps in quick succession.
 STAGNATION_CHECK    = 300    # check interval (episodes)
-STAGNATION_HALF     = 100    # half-window for before/after comparison
-STAGNATION_THRESHOLD = 0.01  # min win_rate improvement to NOT trigger (+1%)
-EPS_BUMP_FACTOR     = 2.0    # multiply eps by this on stagnation
-EPS_BUMP_MAX        = 0.15   # only bump if eps is below this value
-EPS_BUMP_CEIL       = 0.50   # eps never bumped above this value
-STAGNATION_COOLDOWN = 600    # episodes to wait before next possible bump
+STAGNATION_HALF     = 500    # half-window for before/after comparison
+STAGNATION_THRESHOLD = -0.015  # trigger only when win_rate drops by >2% (negative delta)
+EPS_BUMP_FACTOR     = 2.5    # multiply eps by this on stagnation
+EPS_BUMP_MAX        = 0.50   # only bump if eps is below this value
+EPS_BUMP_CEIL       = 0.85   # eps never bumped above this value
+STAGNATION_COOLDOWN = 2500   # episodes to wait before next possible bump
 
 CKPT_DIR = "checkpoints"
 
@@ -117,7 +119,7 @@ def is_win(done, last_state, ep_reward):
     return done and last_state.get("player_hp", 0) > 0 and ep_reward > 50.0
 
 
-def check_stagnation(ep, win_history, agent, last_bump_ep, algo):
+def check_stagnation(ep, stag_history, agent, last_bump_ep, algo):
     """
     Compares win_rate of last STAGNATION_HALF episodes vs preceding half.
     If improvement < STAGNATION_THRESHOLD and eps is already low,
@@ -126,14 +128,14 @@ def check_stagnation(ep, win_history, agent, last_bump_ep, algo):
     Returns updated last_bump_ep.
     """
     # Need enough history and cooldown elapsed
-    if len(win_history) < STAGNATION_HALF * 2:
+    if len(stag_history) < STAGNATION_HALF * 2:
         return last_bump_ep
     if ep - last_bump_ep < STAGNATION_COOLDOWN:
         return last_bump_ep
     if agent.eps >= EPS_BUMP_MAX:
         return last_bump_ep
 
-    hist = list(win_history)
+    hist = list(stag_history)
     old_wr  = sum(hist[:STAGNATION_HALF])  / STAGNATION_HALF
     new_wr  = sum(hist[-STAGNATION_HALF:]) / STAGNATION_HALF
     delta   = new_wr - old_wr
@@ -176,6 +178,7 @@ def train():
                                    no_enemies=phase["no_enemies"],
                                    player_hp=phase["player_hp"])
     win_history    = collections.deque(maxlen=WIN_WINDOW)
+    stag_history   = collections.deque(maxlen=STAGNATION_HALF * 2)  # separate, larger window
     last_bump_ep   = -STAGNATION_COOLDOWN  # allow first check immediately
 
     # Resume
@@ -252,6 +255,7 @@ def train():
         # Win rate
         won = is_win(done, env.last_state, ep_reward)
         win_history.append(int(won))
+        stag_history.append(int(won))
         win_rate = sum(win_history) / len(win_history) if win_history else 0.0
 
         # Best model checkpoint
@@ -298,7 +302,7 @@ def train():
         # Stagnation detection (every STAGNATION_CHECK episodes)
         if ep % STAGNATION_CHECK == 0:
             last_bump_ep = check_stagnation(
-                ep, win_history, agent, last_bump_ep, args.algo)
+                ep, stag_history, agent, last_bump_ep, args.algo)
 
         # Curriculum advance
         phase_episodes = ep - phase_start_ep + 1
@@ -330,6 +334,7 @@ def train():
                                 no_enemies=phase["no_enemies"],
                                 player_hp=phase["player_hp"])
             win_history.clear()
+            stag_history.clear()
 
     env.close()
     agent.save(paths["last_model"])

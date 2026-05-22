@@ -9,6 +9,7 @@
 ///   Убийство врага (за каждого)           +3.0
 ///   Атака без результата                  −0.3
 ///   Действие Idle                         −2.0
+///   Удар в стену (движение без смещения)  −1.0
 ///   Урон по игроку (% от MaxHP × 10)       −10 × hpLost/MaxHP
 ///   Смерть игрока                         −25.0
 ///   BFS-шейпинг (непрерывный, см. ниже)   ±0.5 × Δdist
@@ -40,6 +41,7 @@ public class RewardSystem
     private const float DAMAGE_SCALE = 10.0f;  // штраф = DAMAGE_SCALE * (hpLost / MaxHP)
                                                 // При MaxHP=10: -1 HP → -1.0 (как раньше)
                                                 // При MaxHP=50: -5 HP → -1.0 (пропорционально)
+    private const float WALL_HIT_PENALTY = -1.0f; // штраф за попытку войти в стену
 
     // ── Основной расчёт ───────────────────────────────────────────────────────
     public float Compute(GameState prev, GameState current, bool done)
@@ -61,6 +63,15 @@ public class RewardSystem
         // ── Штраф за простой ────────────────────────────────────────────────
         if (ActionIsIdle(current))
             reward -= 2.0f;
+
+        // ── Штраф за удар в стену ────────────────────────────────────────────
+        // Движение (Up/Down/Left/Right), при котором позиция не изменилась —
+        // значит агент упёрся в стену или границу карты.
+        // Не применяется к Dash (может частично переместиться) и атакам.
+        if (ActionIsMove(current) &&
+            prev.Player.X == current.Player.X &&
+            prev.Player.Y == current.Player.Y)
+            reward += WALL_HIT_PENALTY;
 
         // ── Урон по игроку (% от MaxHP) ──────────────────────────────────────
         // Штраф нормализован: потеря 10% HP = -1.0 вне зависимости от MaxHP.
@@ -168,6 +179,10 @@ public class RewardSystem
 
     private static bool ActionIsIdle(GameState state)
         => state.LastAction == ActionType.Idle;
+
+    private static bool ActionIsMove(GameState state)
+        => state.LastAction is ActionType.Up or ActionType.Down
+                            or ActionType.Left or ActionType.Right;
 
     // ── Сброс между эпизодами ─────────────────────────────────────────────────
     public void Reset()

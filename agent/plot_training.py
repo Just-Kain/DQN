@@ -48,13 +48,15 @@ matplotlib.rcParams.update({
     "axes.titleweight": "bold",
 })
 
-PHASE_COLORS = ["#4fc3f7", "#81c784", "#ffb74d", "#f06292", "#ce93d8"]
+PHASE_COLORS = ["#4fc3f7", "#81c784", "#ffb74d", "#f06292", "#ce93d8", "#80cbc4", "#ff8a65"]
 PHASE_LABELS = {
-    0: "Ph0: 16x16 no-enemy",
-    1: "Ph1: 16x16 enemy",
-    2: "Ph2: 20x20",
-    3: "Ph3: 24x24",
-    4: "Ph4: 32x32",
+    0: "Ph0: 16×16 no-enemy  15hp  →50%",
+    1: "Ph1: 16×16 enemy     15hp  →45%",
+    2: "Ph2: 18×18 enemy     20hp  →40%",
+    3: "Ph3: 20×20 enemy     25hp  →35%",
+    4: "Ph4: 24×24 enemy     30hp  →30%",
+    5: "Ph5: 32×32 enemy     50hp  →25%",
+    6: "Ph6: 64×64 enemy     75hp  (final)",
 }
 ALGO_COLORS  = ["#4fc3f7", "#ff8a65", "#a5d6a7", "#ce93d8", "#fff176"]
 
@@ -147,15 +149,28 @@ def plot_single(algo: str, df: pd.DataFrame, window: int, save: bool):
 
     # ── 1. Win Rate ──────────────────────────────────────────────────────────
     ax = axs[0]
+    trend_w = max(window * 5, len(ep) // 6, 500)   # wide window for macro trend
+    wr_trend = smooth(wr, trend_w) * 100
     ax.plot(ep, wr * 100, color="#555", lw=0.4, alpha=0.4)
     ax.plot(ep, smooth(wr, window) * 100, color="#4fc3f7", lw=1.8, label=f"smooth w={window}")
+    ax.plot(ep, wr_trend, color="#ffd54f", lw=2.2, ls="--", alpha=0.85,
+            label=f"trend w={trend_w}")
     draw_phase_bands(ax, df)
     ax.set_title("Win Rate (%)")
     ax.set_xlabel("Episode")
     ax.set_ylabel("%")
     ax.set_ylim(-2, 105)
     ax.axhline(50, color="#fff", lw=0.6, ls=":", alpha=0.3)
-    ax.legend(handles=phase_legend_handles(df), fontsize=8, loc="upper left")
+    # two legend groups: phase bands + curve legend
+    phase_handles = phase_legend_handles(df)
+    curve_handles = [
+        ax.lines[-3],   # smooth
+        ax.lines[-1],   # trend
+    ]
+    leg1 = ax.legend(handles=phase_handles, fontsize=8, loc="upper left")
+    ax.add_artist(leg1)
+    ax.legend(handles=curve_handles, fontsize=8, loc="lower right",
+              labels=[f"smooth w={window}", f"trend w={trend_w}"])
     ax.grid(True)
 
     # ── 2. Total Reward ──────────────────────────────────────────────────────
@@ -281,9 +296,12 @@ def plot_compare(algos: list[str], dfs: list[pd.DataFrame], window: int, save: b
         ep = df["episode"].values
         wr = df["win_rate"].values
         rw = df["total_reward"].values
+        trend_w = max(window * 5, len(ep) // 6, 500)
 
         axes[0].plot(ep, smooth(wr, window) * 100,
-                     color=color, lw=1.8, label=algo.upper())
+                     color=color, lw=1.4, alpha=0.5, label=f"{algo.upper()} smooth")
+        axes[0].plot(ep, smooth(wr, trend_w) * 100,
+                     color=color, lw=2.2, ls="--", label=f"{algo.upper()} trend")
         axes[1].plot(ep, smooth(rw, window),
                      color=color, lw=1.8, label=algo.upper())
 

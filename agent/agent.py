@@ -64,8 +64,8 @@ agent.py — Три алгоритма обучения с подкреплен�
    GAMMA       = 0.95    γ: горизонт ~20 шагов (для эпизодов 500–1000 шагов)
    LR          = 1e-4    α: Adam learning rate
    EPS_START   = 1.0     начальная ε (полное исследование)
-   EPS_END     = 0.05    минимальная ε
-   EPS_DECAY   = 0.9995  медленное затухание (~9200 эп. до EPS_END)
+   EPS_END     = 0.075   минимальная ε
+   EPS_DECAY   = 0.9998  медленное затухание (~13000 эп. до EPS_END)
    BATCH_SIZE  = 256     (только DQN/DDQN)
    BUFFER_CAP  = 200_000 (только DQN/DDQN)
    TARGET_UPDATE= 500    (только DQN/DDQN)
@@ -84,8 +84,8 @@ from replay_buffer import ReplayBuffer
 GAMMA         = 0.95
 LR            = 1e-4
 EPS_START     = 1.0
-EPS_END       = 0.05
-EPS_DECAY     = 0.9995   # ~9200 эпизодов до EPS_END (было 0.9985 → ~2000)
+EPS_END       = 0.005
+EPS_DECAY     = 0.9998   # ~13000 эпизодов до EPS_END
 
 # ── Гиперпараметры (DQN / DDQN) ──────────────────────────────────────────────
 BATCH_SIZE    = 256

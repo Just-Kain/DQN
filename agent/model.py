@@ -22,17 +22,23 @@ import torch.nn as nn
 
 
 OBS_SIZE    = 1157  # 33×33 + 8×8 + 4 скаляра = 1089 + 64 + 4
-NUM_ACTIONS = 7     # Up Down Left Right MeleeAttack ArrowShot Dash  (без Idle)
+NUM_ACTIONS = 7     # Up Down Left Right MeleeAttack ArrowShot Dash  
 
 
 class DQN(nn.Module):
     def __init__(self, obs_size: int = OBS_SIZE, num_actions: int = NUM_ACTIONS):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(obs_size, 512),
+            nn.Linear(obs_size, 1024),
             nn.ReLU(),
+            nn.Linear(1024, 512),
+            nn.ReLU(),
+            nn.Dropout(0.1),
             nn.Linear(512, 256),
             nn.ReLU(),
+            nn.Linear(256, num_actions),
+            nn.Linear(num_actions, 256),
+            nn.Sigmoid(),
             nn.Linear(256, num_actions),
         )
 
