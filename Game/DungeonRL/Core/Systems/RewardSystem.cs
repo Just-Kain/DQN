@@ -107,7 +107,7 @@ public class RewardSystem
             reward += BFS_SCALE * delta;
         }
 
-        _prevExitDist = currDist;
+        _prevExitDist = Math.Max(currDist, _prevExitDist);
 
         // ── Победа ───────────────────────────────────────────────────────────
         bool onExit = current.Map.Tiles[current.Player.X, current.Player.Y] == TileType.Exit;

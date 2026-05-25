@@ -29,17 +29,12 @@ class DQN(nn.Module):
     def __init__(self, obs_size: int = OBS_SIZE, num_actions: int = NUM_ACTIONS):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(obs_size, 1024),
+            nn.Linear(obs_size, 512),
+            nn.MaxPool1d(kernel_size=2,stride=2),
             nn.ReLU(),
-            nn.Linear(1024, 512),
-            nn.ReLU(),
-            nn.Dropout(0.1),
-            nn.Linear(512, 256),
-            nn.ReLU(),
-            nn.Linear(256, num_actions),
-            nn.Linear(num_actions, 256),
+            nn.Linear(256,128),
             nn.Sigmoid(),
-            nn.Linear(256, num_actions),
+            nn.Linear(128, num_actions),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
